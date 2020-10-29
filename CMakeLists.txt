@@ -24,5 +24,8 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
 )
 
-add_executable(visual_odometry_node src/visual_odometry.cpp)
-target_link_libraries(visual_odometry_node ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+#add_executable(visual_odometry_node src/visual_odometry.cpp src/feature_detection.cpp)
+#target_link_libraries(visual_odometry_node ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+
+add_executable(feature_detection src/feature_detection.cpp)
+target_link_libraries(feature_detection ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
