@@ -1,8 +1,55 @@
 ////
-//// Created by amy on 10/28/20.
+//// Visual Odometry Node
 ////
-//
-//#include "ros/ros.h"
+/*
+ * DONE:
+ * Camera calibration
+ *
+ * TODO:
+ *
+ */
+#include "visual_odometry.h"
+
+VisualOdometryNode::VisualOdometryNode(ros::NodeHandle* nodehandle):nh_(*nodehandle), it_(*nodehandle)
+{
+    ROS_INFO("Initializing Visual Odometry Node");
+    initializePublishers();
+}
+
+void VisualOdometryNode::initializePublishers() {
+    ROS_INFO("Initializing Subscribers");
+
+    // TODO: Make these topics ROS parameters & attributes of class
+    camera_raw_subscriber_ = it_.subscribe("camera/rgb/image_raw", 1, &VisualOdometryNode::cameraRawCallback,this);
+//    camera_info_subscriber_ = nh_.subscribe("camera/rgb/camera_info", 1, &VisualOdometryNode::cameraInfoCallback,this);
+
+}
+
+void VisualOdometryNode::cameraRawCallback(const sensor_msgs::ImageConstPtr& msg) {
+    try {
+        cv::imshow("Camera view", cv_bridge::toCvShare(msg, "bgr8")->image);
+        cv::waitKey(30);
+    } catch (cv_bridge::Exception& e) {
+        ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
+    }
+}
+
+int main(int argc, char **argv) {
+    ros::init(argc, argv, "visual_odom");
+    ros::NodeHandle nh;
+
+    VisualOdometryNode voNode(&nh);
+
+    cv::namedWindow("Camera view");
+    cv::startWindowThread();
+
+    ros::spin();
+    cv::destroyWindow("Camera view");
+}
+
+
+
+
 //#include "std_msgs/String.h"
 //
 //#include <sstream>
@@ -14,9 +61,9 @@
 //using namespace cv;
 //using namespace std;
 //
-int main(int argc, char** argv) {
-    return 0;
-}
+
+
+
 //    CommandLineParser parser( argc, argv, keys );
 //    // Read the image file
 //    Mat img1 = imread("/home/amy/robo_ws/src/cv_project/img/view1.jpg", IMREAD_GRAYSCALE );

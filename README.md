@@ -17,7 +17,10 @@ cmake -DOPENCV_EXTRA_MODULES_PATH=../opencv_contrib-master/modules ../opencv-mas
 cmake --build .
 ```
 
-
+## Usage
++ `roslaunch openni_launch openni.launch` (or play bagfile)
++ `rosrun computer_vision computer_vision`
+LES_PATH=../opencv_contrib-master/modules ../opencv-m
 ## Camera calibration
 + Create a checkerboard ([reference](https://markhedleyjones.com/projects/calibration-checkerboard-collection))
     + Checkerboard used: A4 - 25mm squares - 8x6 verticies, 9x7 squares
