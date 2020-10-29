@@ -16,17 +16,12 @@ public:
 
 private:
     ros::NodeHandle nh_;
-    image_transport::Subscriber camera_raw_subscriber_;
-    ros::Subscriber camera_info_subscriber_;
-
+    image_transport::CameraSubscriber camera_subscriber_;
     image_transport::ImageTransport it_;
 
     void initializePublishers();
 
-    void cameraRawCallback(const sensor_msgs::ImageConstPtr& msg);
-//    void cameraInfoCallback(const sensor_msgs::CameraInfo& msg);
-
-
+    void cameraRawCallback(const sensor_msgs::ImageConstPtr& image, const sensor_msgs::CameraInfoConstPtr& camera_info);
 };
 
 

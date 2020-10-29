@@ -20,17 +20,18 @@ void VisualOdometryNode::initializePublishers() {
     ROS_INFO("Initializing Subscribers");
 
     // TODO: Make these topics ROS parameters & attributes of class
-    camera_raw_subscriber_ = it_.subscribe("camera/rgb/image_raw", 1, &VisualOdometryNode::cameraRawCallback,this);
-//    camera_info_subscriber_ = nh_.subscribe("camera/rgb/camera_info", 1, &VisualOdometryNode::cameraInfoCallback,this);
-
+    // Provides synchronized raw image and camera info
+    // Based on: https://github.com/tu-darmstadt-ros-pkg/hector_vision/blob/kinetic-devel/hector_qrcode_detection/src/qrcode_detection.cpp#L59
+    // and https://answers.ros.org/question/290341/correct-way-to-subscribe-to-image-and-camerainfo-topic-using-image_transport-c-in-kinetic/
+    camera_subscriber_ = it_.subscribeCamera("camera/rgb/image_raw", 1, &VisualOdometryNode::cameraRawCallback,this);
 }
 
-void VisualOdometryNode::cameraRawCallback(const sensor_msgs::ImageConstPtr& msg) {
+void VisualOdometryNode::cameraRawCallback(const sensor_msgs::ImageConstPtr& image, const sensor_msgs::CameraInfoConstPtr& camera_info) {
     try {
-        cv::imshow("Camera view", cv_bridge::toCvShare(msg, "bgr8")->image);
+        cv::imshow("Camera view", cv_bridge::toCvShare(image, "bgr8")->image);
         cv::waitKey(30);
     } catch (cv_bridge::Exception& e) {
-        ROS_ERROR("Could not convert from '%s' to 'bgr8'.", msg->encoding.c_str());
+        ROS_ERROR("Could not convert from '%s' to 'bgr8'.", image->encoding.c_str());
     }
 }
 
