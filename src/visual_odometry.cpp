@@ -25,14 +25,27 @@ void VisualOdometryNode::initializePublishers() {
     // and https://answers.ros.org/question/290341/correct-way-to-subscribe-to-image-and-camerainfo-topic-using-image_transport-c-in-kinetic/
     camera_subscriber_ = it_.subscribeCamera("camera/rgb/image_raw", 1, &VisualOdometryNode::cameraRawCallback,this);
 }
-
+//using namespace cv;
+//using namespace cv::xfeatures2d;
 void VisualOdometryNode::cameraRawCallback(const sensor_msgs::ImageConstPtr& image, const sensor_msgs::CameraInfoConstPtr& camera_info) {
-    try {
-        cv::imshow("Camera view", cv_bridge::toCvShare(image, "bgr8")->image);
-        cv::waitKey(30);
-    } catch (cv_bridge::Exception& e) {
-        ROS_ERROR("Could not convert from '%s' to 'bgr8'.", image->encoding.c_str());
-    }
+    int minHessian = 400;
+    cv::Ptr<cv::xfeatures2d::SURF> detector = cv::xfeatures2d::SURF::create( minHessian );
+    std::vector<cv::KeyPoint> keypoints;
+    detector->detect(cv_bridge::toCvShare(image, "bgr8")->image, keypoints);
+    //-- Draw keypoints
+    cv::Mat img_keypoints;
+    drawKeypoints( cv_bridge::toCvShare(image, "bgr8")->image, keypoints, img_keypoints );
+    //-- Show detected (drawn) keypoints
+    imshow("SURF Keypoints", img_keypoints );
+
+//    try {
+//        cv::imshow("Camera view", cv_bridge::toCvShare(image, "bgr8")->image);
+//        cv::waitKey(30);
+//    } catch (cv_bridge::Exception& e) {
+//        ROS_ERROR("Could not convert from '%s' to 'bgr8'.", image->encoding.c_str());
+//    }
+
+//    camera_info->K;
 }
 
 int main(int argc, char **argv) {
