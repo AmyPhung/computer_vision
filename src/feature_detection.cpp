@@ -101,8 +101,8 @@ int main( int argc, char* argv[] )
     ros::Rate loop_rate(10);
 
     // -----------------------------------------------------------------------------
-    Mat img1 = imread("/home/amy/robo_ws/src/computer_vision/img/kinect1.png", IMREAD_GRAYSCALE );
-    Mat img2 = imread("/home/amy/robo_ws/src/computer_vision/img/kinect2.png", IMREAD_GRAYSCALE );
+    Mat img1 = imread("/home/amy/robo_ws/src/computer_vision/img/binder2.png", IMREAD_GRAYSCALE );
+    Mat img2 = imread("/home/amy/robo_ws/src/computer_vision/img/binder3.png", IMREAD_GRAYSCALE );
 
 
     if ( img1.empty() || img2.empty())
@@ -206,6 +206,16 @@ int main( int argc, char* argv[] )
 
         ros_pcl_msg.points.push_back(new_pt);
     }
+
+    //-- Draw matches-------------------------------------------------------------
+
+    Mat img_matches;
+    drawMatches( img1, keypoints1, img2, keypoints2, good_matches, img_matches, Scalar::all(-1),
+                 Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
+    //-- Show detected matches
+    imshow("Good Matches", img_matches );
+    waitKey();
+//    return 0;
 
     while (ros::ok()) {
         pcl_pub.publish(ros_pcl_msg);
