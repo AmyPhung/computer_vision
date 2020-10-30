@@ -6,6 +6,11 @@
 #include "opencv2/features2d.hpp"
 #include "opencv2/xfeatures2d.hpp"
 
+// ROS Stuff
+#include <ros/ros.h>
+#include <sensor_msgs/PointCloud.h>
+#include <geometry_msgs/Point32.h>
+
 using namespace cv;
 using namespace cv::xfeatures2d;
 using std::cout;
@@ -89,6 +94,13 @@ double TriangulatePoints(
 
 int main( int argc, char* argv[] )
 {
+    // Initialize ROS Node-----------------------------------------------------
+    ros::init(argc, argv, "feature_detection");
+    ros::NodeHandle n;
+    ros::Publisher pcl_pub = n.advertise<sensor_msgs::PointCloud>("reconstruction_pcl2", 10);
+    ros::Rate loop_rate(10);
+
+    // -----------------------------------------------------------------------------
     Mat img1 = imread("/home/amy/robo_ws/src/computer_vision/img/kinect1.png", IMREAD_GRAYSCALE );
     Mat img2 = imread("/home/amy/robo_ws/src/computer_vision/img/kinect2.png", IMREAD_GRAYSCALE );
 
@@ -179,15 +191,43 @@ int main( int argc, char* argv[] )
 
 
 
-    //-- Draw matches-------------------------------------------------------------
+    // Convert from pointcloud to ROS message
+    // TODO: Move this somewhere else
+    sensor_msgs::PointCloud ros_pcl_msg;
+    ros_pcl_msg.header.frame_id = "map";
+    ros_pcl_msg.header.stamp = ros::Time::now();
 
-    Mat img_matches;
-    drawMatches( img1, keypoints1, img2, keypoints2, good_matches, img_matches, Scalar::all(-1),
-                 Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
-    //-- Show detected matches
-    imshow("Good Matches", img_matches );
-    waitKey();
+    for(Point3d pt : pointcloud) {
+        geometry_msgs::Point32 new_pt;
+        new_pt.x = pt.x;
+//        cout<<pt.x<<endl;
+        new_pt.y = pt.y;
+        new_pt.z = pt.z;
+
+        ros_pcl_msg.points.push_back(new_pt);
+    }
+
+    while (ros::ok()) {
+        pcl_pub.publish(ros_pcl_msg);
+        ros::spinOnce();
+        loop_rate.sleep();
+    }
+
     return 0;
+
+
+//    //-- Draw matches-------------------------------------------------------------
+//
+//    Mat img_matches;
+//    drawMatches( img1, keypoints1, img2, keypoints2, good_matches, img_matches, Scalar::all(-1),
+//                 Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
+//    //-- Show detected matches
+//    imshow("Good Matches", img_matches );
+//    waitKey();
+//    return 0;
+
+
+
 
 
 //    //-- Draw keypoints
