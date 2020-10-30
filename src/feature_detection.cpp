@@ -6,8 +6,6 @@
 #include "opencv2/features2d.hpp"
 #include "opencv2/xfeatures2d.hpp"
 
-//#include
-
 using namespace cv;
 using namespace cv::xfeatures2d;
 using std::cout;
@@ -94,6 +92,7 @@ int main( int argc, char* argv[] )
     Mat img1 = imread("/home/amy/robo_ws/src/computer_vision/img/kinect1.png", IMREAD_GRAYSCALE );
     Mat img2 = imread("/home/amy/robo_ws/src/computer_vision/img/kinect2.png", IMREAD_GRAYSCALE );
 
+
     if ( img1.empty() || img2.empty())
     {
         cout << "Could not open or find the image!\n" << endl;
@@ -125,7 +124,6 @@ int main( int argc, char* argv[] )
             good_matches.push_back(knn_matches[i][0]);
         }
     }
-
 
     //    std::vector<DMatch> n_first_matches(good_matches.begin(), good_matches.begin() + 10);
 
@@ -182,6 +180,7 @@ int main( int argc, char* argv[] )
 
 
     //-- Draw matches-------------------------------------------------------------
+
     Mat img_matches;
     drawMatches( img1, keypoints1, img2, keypoints2, good_matches, img_matches, Scalar::all(-1),
                  Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
