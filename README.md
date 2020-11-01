@@ -18,9 +18,12 @@ cmake --build .
 ```
 
 ## Usage
++ `rosrun computer_vision feature_detection` (will only use 2 hardcoded frames)
+
+For later:
 + `roslaunch openni_launch openni.launch` (or play bagfile)
 + `rosrun computer_vision computer_vision`
-LES_PATH=../opencv_contrib-master/modules ../opencv-m
+
 ## Camera calibration
 + Create a checkerboard ([reference](https://markhedleyjones.com/projects/calibration-checkerboard-collection))
     + Checkerboard used: A4 - 25mm squares - 8x6 verticies, 9x7 squares

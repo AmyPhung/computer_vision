@@ -4,6 +4,7 @@ project(computer_vision)
 find_package(OpenCV REQUIRED )
 find_package(catkin REQUIRED COMPONENTS
   cv_bridge
+  geometry_msgs
   image_transport
   roscpp
   rospy
@@ -24,5 +25,8 @@ include_directories(
   ${OpenCV_INCLUDE_DIRS}
 )
 
-add_executable(visual_odometry_node src/visual_odometry.cpp)
-target_link_libraries(visual_odometry_node ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+add_executable(visual_odometry src/visual_odometry/visual_odometry.cpp)
+add_executable(feature_detection src/feature_detection/feature_detection.cpp)
+
+target_link_libraries(visual_odometry ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+target_link_libraries(feature_detection ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
