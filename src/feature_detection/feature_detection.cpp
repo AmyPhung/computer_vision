@@ -110,8 +110,8 @@ int main( int argc, char* argv[] )
     ros::Rate loop_rate(10);
 
     // -----------------------------------------------------------------------------
-    Mat img1 = imread("/home/egonzalez/catkin_ws/src/computer_vision/img/binder2.png", IMREAD_GRAYSCALE );
-    Mat img2 = imread("/home/egonzalez/catkin_ws/src/computer_vision/img/binder3.png", IMREAD_GRAYSCALE );
+    Mat img1 = imread("/home/amy/robo_ws/src/computer_vision/img/binder2.png", IMREAD_GRAYSCALE );
+    Mat img2 = imread("/home/amy/robo_ws/src/computer_vision/img/binder3.png", IMREAD_GRAYSCALE );
 
 
     if ( img1.empty() || img2.empty())
