@@ -1,7 +1,6 @@
 #include <iostream>
-// #include <cv.hpp>
 
-// #include "cv.h"
+// One of these is for RANSAC
 #include "opencv2/core.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/photo.hpp"
@@ -11,6 +10,7 @@
 #include "opencv2/objdetect.hpp"
 #include "opencv2/core.hpp"
 
+// Core OpenCV libraries
 #include "opencv2/highgui.hpp"
 #include "opencv2/features2d.hpp"
 #include "opencv2/xfeatures2d.hpp"
@@ -122,30 +122,16 @@ int main( int argc, char* argv[] )
     }
 
     //-- Step 1: Detect the keypoints using SURF Detector
-    // int minHessian = 400;
-    // Ptr<SURF> detector = SURF::create( minHessian );
+    int minHessian = 400;
+    Ptr<SURF> detector = SURF::create( minHessian );
 
-    // Ptr<FastFeatureDetector> detector = FastFeatureDetector::create();
-
-    Ptr<ORB> detector = ORB::create();
+    // Initialize keypoints and descriptors
     std::vector<KeyPoint> keypoints1, keypoints2;
-
-    // detector->detect(img1, keypoints1);
-    // detector->detect(img2, keypoints2);
-
     Mat descriptors1, descriptors2;
+
+    // Detect keypoints and create descriptors
     detector->detectAndCompute( img1, noArray(), keypoints1, descriptors1 );
     detector->detectAndCompute( img2, noArray(), keypoints2, descriptors2 );
-
-    // Ptr<BRISK> descriptorExtractor = BRISK::create();
-    // brisk->compute(img1)
-
-    // Mat descriptors1, descriptors2;
-    // Ptr<BRISK> descriptorExtractor = BRISK::create();
-
-    // // <DescriptorExtractor>("Feature2D.BRISK");
-    // descriptorExtractor->compute(img1, keypoints1, descriptors1);
-    // descriptorExtractor->compute(img2, keypoints2, descriptors2);
 
     //-- Step 2: Matching descriptor vectors with a FLANN based matcher
     // Since SURF is a floating-point descriptor NORM_L2 is used
