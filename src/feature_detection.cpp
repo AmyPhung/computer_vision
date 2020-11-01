@@ -1,7 +1,16 @@
 #include <iostream>
-#include <cv.hpp>
+
+// One of these is for RANSAC
+#include "opencv2/core.hpp"
+#include "opencv2/imgproc.hpp"
+#include "opencv2/photo.hpp"
+#include "opencv2/video.hpp"
+#include "opencv2/highgui.hpp"
+#include "opencv2/calib3d.hpp"
+#include "opencv2/objdetect.hpp"
 #include "opencv2/core.hpp"
 
+// Core OpenCV libraries
 #include "opencv2/highgui.hpp"
 #include "opencv2/features2d.hpp"
 #include "opencv2/xfeatures2d.hpp"
@@ -101,8 +110,8 @@ int main( int argc, char* argv[] )
     ros::Rate loop_rate(10);
 
     // -----------------------------------------------------------------------------
-    Mat img1 = imread("/home/amy/robo_ws/src/computer_vision/img/binder2.png", IMREAD_GRAYSCALE );
-    Mat img2 = imread("/home/amy/robo_ws/src/computer_vision/img/binder3.png", IMREAD_GRAYSCALE );
+    Mat img1 = imread("/home/egonzalez/catkin_ws/src/computer_vision/img/binder2.png", IMREAD_GRAYSCALE );
+    Mat img2 = imread("/home/egonzalez/catkin_ws/src/computer_vision/img/binder3.png", IMREAD_GRAYSCALE );
 
 
     if ( img1.empty() || img2.empty())
@@ -115,11 +124,14 @@ int main( int argc, char* argv[] )
     //-- Step 1: Detect the keypoints using SURF Detector
     int minHessian = 400;
     Ptr<SURF> detector = SURF::create( minHessian );
+
+    // Initialize keypoints and descriptors
     std::vector<KeyPoint> keypoints1, keypoints2;
     Mat descriptors1, descriptors2;
+
+    // Detect keypoints and create descriptors
     detector->detectAndCompute( img1, noArray(), keypoints1, descriptors1 );
     detector->detectAndCompute( img2, noArray(), keypoints2, descriptors2 );
-
 
     //-- Step 2: Matching descriptor vectors with a FLANN based matcher
     // Since SURF is a floating-point descriptor NORM_L2 is used
@@ -215,7 +227,7 @@ int main( int argc, char* argv[] )
     //-- Show detected matches
     imshow("Good Matches", img_matches );
     waitKey();
-//    return 0;
+//    return/* 0;
 
     while (ros::ok()) {
         pcl_pub.publish(ros_pcl_msg);
