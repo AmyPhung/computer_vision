@@ -19,6 +19,8 @@
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud.h>
 #include <geometry_msgs/Point32.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <tf2/LinearMath/Quaternion.h>
 
 using namespace cv;
 using namespace cv::xfeatures2d;
@@ -64,8 +66,8 @@ Mat_<double> LinearLSTriangulation(
 }
 
 void TriangulatePoints(
-        const vector<Point2f>& pt_set1,
-        const vector<Point2f>& pt_set2,
+        const vector<KeyPoint>& pt_set1,
+        const vector<KeyPoint>& pt_set2,
         const Mat& K,
         const Mat& Kinv,
         const Matx34d& P,
@@ -74,11 +76,11 @@ void TriangulatePoints(
     vector<double> reproj_error;
     for (unsigned int i=0; i<pt_set1.size(); i++) {
 //convert to normalized homogeneous coordinates
-        Point2f kp = pt_set1[i];
+        Point2f kp = pt_set1[i].pt;
         Point3d u(kp.x,kp.y,1.0);
         Mat_<double> um = Kinv * Mat_<double>(u);
         u = um.at<Point3d>(0);
-        Point2f kp1 = pt_set2[i];
+        Point2f kp1 = pt_set2[i].pt;
         Point3d u1(kp1.x,kp1.y,1.0);
         Mat_<double> um1 = Kinv * Mat_<double>(u1);
         u1 = um1.at<Point3d>(0);
@@ -102,7 +104,9 @@ void TriangulatePoints(
 void FindCameraMatrices(const Mat& K,
                         const vector<Point2f>& imgpts1,
                         const vector<Point2f>& imgpts2,
-                        Matx34d& P1) {
+                        Matx34d& P1,
+                        Mat_<double>& R,
+                        Mat_<double>& t) {
     //Find camera matrices
     //Get Fundamental Matrix
     Mat F = findFundamentalMat(imgpts1, imgpts2, FM_RANSAC, 0.1, 0.99);
@@ -116,8 +120,8 @@ void FindCameraMatrices(const Mat& K,
     Matx33d W(0,-1,0,//HZ 9.13
               1,0,0,
               0,0,1);
-    Mat_<double> R = svd_u * Mat(W) * svd_vt; //HZ 9.19
-    Mat_<double> t = svd_u.col(2); //u3
+    R = svd_u * Mat(W) * svd_vt; //HZ 9.19
+    t = svd_u.col(2); //u3
     if (!CheckCoherentRotation(R)) {
         cout<<"resulting rotation is not coherent\n";
         return;
@@ -127,11 +131,42 @@ void FindCameraMatrices(const Mat& K,
                  R(2,0),R(2,1),R(2,2),t(2));
 }
 
+bool isRotationMatrix(Mat &R) {
+    Mat Rt;
+    transpose(R, Rt);
+    Mat shouldBeIdentity = Rt * R;
+    Mat I = Mat::eye(3,3, shouldBeIdentity.type());
+    return  norm(I, shouldBeIdentity) < 1e-6;
+}
+
+Vec3f rotationMatrixToEulerAngles(Mat &R) {
+    assert(isRotationMatrix(R));
+
+    float sy = sqrt(R.at<double>(0,0) * R.at<double>(0,0) +  R.at<double>(1,0) * R.at<double>(1,0) );
+
+    bool singular = sy < 1e-6;
+
+    float x, y, z;
+
+    if (!singular) {
+        x = atan2(R.at<double>(2,1) , R.at<double>(2,2));
+        y = atan2(-R.at<double>(2,0), sy);
+        z = atan2(R.at<double>(1,0), R.at<double>(0,0));
+    } else {
+        x = atan2(-R.at<double>(1,2), R.at<double>(1,1));
+        y = atan2(-R.at<double>(2,0), sy);
+        z = 0;
+    }
+    return Vec3f(x, y, z);
+}
+
+
 int main( int argc, char* argv[] ) {
     // Initialize ROS Node--------------------------------------------------------------------------------------------
     ros::init(argc, argv, "feature_detection");
     ros::NodeHandle n;
     ros::Publisher pcl_pub = n.advertise<sensor_msgs::PointCloud>("reconstruction_pcl2", 10);
+    ros::Publisher cam2_pose_pub = n.advertise<geometry_msgs::PoseStamped>("cam2_pose", 10);
     ros::Rate loop_rate(10);
 
     // Detect Keypoints & create descriptors --------------------------------------------------------------------------
@@ -195,11 +230,32 @@ int main( int argc, char* argv[] ) {
         imgpts2.push_back(keypoints2[good_matches[i].trainIdx].pt);
     }
     Matx34d P1;
-    FindCameraMatrices(K, imgpts1, imgpts2, P1);
+    Mat_<double> R;
+    Mat_<double> t;
+    FindCameraMatrices(K, imgpts1, imgpts2, P1, R, t);
+
+    // Convert from rotation matrix to euler angles
+    Vec3f cam_euler = rotationMatrixToEulerAngles(R);
+    // Convert from euler angles to quaternion
+    tf2::Quaternion cam_quat;
+    cam_quat.setRPY( cam_euler[0], cam_euler[1],cam_euler[2] );
 
     // TODO: Display cameras in RVIZ
     cout << "Camera 2 Rotation & Translation" << endl;
-    cout << P1 << endl;
+    cout << cam_euler << endl;
+    cout << t << endl;
+
+    geometry_msgs::PoseStamped cam2_pose_msg;
+    // TODO: Remove hardcode
+    cam2_pose_msg.header.frame_id = "map";
+    cam2_pose_msg.header.stamp = ros::Time().now();
+    cam2_pose_msg.pose.orientation.x = cam_quat.x();
+    cam2_pose_msg.pose.orientation.y = cam_quat.y();
+    cam2_pose_msg.pose.orientation.z = cam_quat.z();
+    cam2_pose_msg.pose.orientation.w = cam_quat.w();
+    cam2_pose_msg.pose.position.x = *t[0];
+    cam2_pose_msg.pose.position.y = *t[1];
+    cam2_pose_msg.pose.position.z = *t[2];
 
 //    // Find camera matrices -------------------------------------------------------------------------------------
 //    vector<Point2f> imgpts1, imgpts2;
@@ -242,7 +298,7 @@ int main( int argc, char* argv[] ) {
               0, 0, 1, 0);
 
     vector<Point3d> pointcloud;
-    TriangulatePoints(imgpts1, imgpts2, K, Kinv, P, P1, pointcloud);
+    TriangulatePoints(keypoints1, keypoints2, K, Kinv, P, P1, pointcloud);
 
     // Convert from pointcloud to ROS message ------------------------------------------------------------------
     // TODO: Move this somewhere else
@@ -271,6 +327,8 @@ int main( int argc, char* argv[] ) {
     while (ros::ok()) {
         cout << ros_pcl_msg.points.size() << endl;
         pcl_pub.publish(ros_pcl_msg);
+
+        cam2_pose_pub.publish(cam2_pose_msg);
         ros::spinOnce();
         loop_rate.sleep();
     }
