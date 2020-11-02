@@ -101,21 +101,19 @@ double TriangulatePoints(
     return me[0];
 }
 
-int main( int argc, char* argv[] )
-{
-    // Initialize ROS Node-----------------------------------------------------
+int main( int argc, char* argv[] ) {
+    // Initialize ROS Node--------------------------------------------------------------------------------------------
     ros::init(argc, argv, "feature_detection");
     ros::NodeHandle n;
     ros::Publisher pcl_pub = n.advertise<sensor_msgs::PointCloud>("reconstruction_pcl2", 10);
     ros::Rate loop_rate(10);
 
-    // -----------------------------------------------------------------------------
-    Mat img1 = imread("/home/amy/robo_ws/src/computer_vision/img/binder2.png", IMREAD_GRAYSCALE );
-    Mat img2 = imread("/home/amy/robo_ws/src/computer_vision/img/binder3.png", IMREAD_GRAYSCALE );
+    // Detect Keypoints & create descriptors --------------------------------------------------------------------------
+    Mat img1 = imread("/home/amy/robo_ws/src/computer_vision/img/fountain0.jpg", IMREAD_GRAYSCALE);
+    Mat img2 = imread("/home/amy/robo_ws/src/computer_vision/img/fountain1.jpg", IMREAD_GRAYSCALE);
 
 
-    if ( img1.empty() || img2.empty())
-    {
+    if (img1.empty() || img2.empty()) {
         cout << "Could not open or find the image!\n" << endl;
         cout << "Usage: " << argv[0] << " <Input image>" << endl;
         return -1;
@@ -123,44 +121,44 @@ int main( int argc, char* argv[] )
 
     //-- Step 1: Detect the keypoints using SURF Detector
     int minHessian = 400;
-    Ptr<SURF> detector = SURF::create( minHessian );
+    Ptr<SURF> detector = SURF::create(minHessian);
 
     // Initialize keypoints and descriptors
     std::vector<KeyPoint> keypoints1, keypoints2;
     Mat descriptors1, descriptors2;
 
     // Detect keypoints and create descriptors
-    detector->detectAndCompute( img1, noArray(), keypoints1, descriptors1 );
-    detector->detectAndCompute( img2, noArray(), keypoints2, descriptors2 );
+    detector->detectAndCompute(img1, noArray(), keypoints1, descriptors1);
+    detector->detectAndCompute(img2, noArray(), keypoints2, descriptors2);
 
     //-- Step 2: Matching descriptor vectors with a FLANN based matcher
     // Since SURF is a floating-point descriptor NORM_L2 is used
     Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create(DescriptorMatcher::FLANNBASED);
-    std::vector< std::vector<DMatch> > knn_matches;
-    matcher->knnMatch( descriptors1, descriptors2, knn_matches, 2 );
+    std::vector<std::vector<DMatch> > knn_matches;
+    matcher->knnMatch(descriptors1, descriptors2, knn_matches, 2);
     //-- Filter matches using the Lowe's ratio test
     const float ratio_thresh = 0.7f;
     std::vector<DMatch> good_matches;
-    for (size_t i = 0; i < knn_matches.size(); i++)
-    {
-        if (knn_matches[i][0].distance < ratio_thresh * knn_matches[i][1].distance)
-        {
+    for (size_t i = 0; i < knn_matches.size(); i++) {
+        if (knn_matches[i][0].distance < ratio_thresh * knn_matches[i][1].distance) {
             good_matches.push_back(knn_matches[i][0]);
         }
     }
 
-    //    std::vector<DMatch> n_first_matches(good_matches.begin(), good_matches.begin() + 10);
-
     // Find camera matrices -------------------------------------------------------------------------------------
-    std::vector<Point2f>imgpts1,imgpts2;
-    for( unsigned int i = 0; i<good_matches.size(); i++ ){
-    // queryIdx is the "left" image
+    std::vector<Point2f> imgpts1, imgpts2;
+    for (unsigned int i = 0; i < good_matches.size(); i++) {
+        // queryIdx is the "left" image
         imgpts1.push_back(keypoints1[good_matches[i].queryIdx].pt);
-    // trainIdx is the "right" image
+        // trainIdx is the "right" image
         imgpts2.push_back(keypoints2[good_matches[i].trainIdx].pt);
     }
     // TODO: Replace K with camera info topic
-    float k_arr[9] = {540.707803103922, 0.0, 322.35464797552, 0.0, 538.1654785489391, 242.2561047778664, 0.0, 0.0, 1.0};
+    // Kinect Calibration
+//    float k_arr[9] = {540.707803103922, 0.0, 322.35464797552, 0.0, 538.1654785489391, 242.2561047778664, 0.0, 0.0, 1.0};
+    // Benchmark Photo Calibration
+    float k_arr[9] = {2759.48, 0, 1520.69, 0, 2764.16, 1006.81, 0, 0, 1};
+
     Mat_<double> K = cv::Mat(3, 3, CV_32F, k_arr);
 
     Mat F = findFundamentalMat(imgpts1, imgpts2, FM_RANSAC, 0.1, 0.99);
@@ -168,15 +166,14 @@ int main( int argc, char* argv[] )
 
     // Decompose essential matrix into rotation and translation elements --------------------------------------------
     SVD svd(E);
-    Matx33d W(0,-1,0,//HZ 9.13
-              1,0,0,
-              0,0,1);
+    Matx33d W(0, -1, 0,//HZ 9.13
+              1, 0, 0,
+              0, 0, 1);
     Mat_<double> R = svd.u * Mat(W) * svd.vt; //HZ 9.19
     Mat_<double> t = svd.u.col(2); //u3
-    Matx34d P1( R(0,0),R(0,1), R(0,2), t(0),
-                R(1,0),R(1,1), R(1,2), t(1),
-                R(2,0),R(2,1), R(2,2), t(2));
-
+    Matx34d P1(R(0, 0), R(0, 1), R(0, 2), t(0),
+               R(1, 0), R(1, 1), R(1, 2), t(1),
+               R(2, 0), R(2, 1), R(2, 2), t(2));
 
     // Rotation & translation matrices!!!
     cout << t << endl;
@@ -187,55 +184,45 @@ int main( int argc, char* argv[] )
     invert(K, Kinv);
 
     // Initial perspective is fixed with no rotation and no translation
-    Matx34d P( 1, 0, 0, 0,
-               0, 1, 0, 0,
-               0, 0, 1, 0);
+    Matx34d P(1, 0, 0, 0,
+              0, 1, 0, 0,
+              0, 0, 1, 0);
 
     std::vector<Point3d> pointcloud;
 
     TriangulatePoints(keypoints1, keypoints2, K, Kinv, P, P1, pointcloud);
-////    const std::vector<KeyPoint>& pt_set1,
-////    const std::vector<KeyPoint>& pt_set2,
-////    const Mat&Kinv,
-////    const Matx34d& P,
-////    const Matx34d& P1,
-////    std::vector<Point3d>& pointcloud)
 
-
-
-    // Convert from pointcloud to ROS message
+    // Convert from pointcloud to ROS message ------------------------------------------------------------------
     // TODO: Move this somewhere else
     sensor_msgs::PointCloud ros_pcl_msg;
     ros_pcl_msg.header.frame_id = "map";
     ros_pcl_msg.header.stamp = ros::Time::now();
 
-    for(Point3d pt : pointcloud) {
+    for (Point3d pt : pointcloud) {
         geometry_msgs::Point32 new_pt;
         new_pt.x = pt.x;
-//        cout<<pt.x<<endl;
         new_pt.y = pt.y;
         new_pt.z = pt.z;
 
         ros_pcl_msg.points.push_back(new_pt);
     }
 
-    //-- Draw matches-------------------------------------------------------------
-
+    // Draw matches -------------------------------------------------------------------------------------------------
     Mat img_matches;
-    drawMatches( img1, keypoints1, img2, keypoints2, good_matches, img_matches, Scalar::all(-1),
-                 Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
-    //-- Show detected matches
-    imshow("Good Matches", img_matches );
+    drawMatches(img1, keypoints1, img2, keypoints2, good_matches, img_matches, Scalar::all(-1),
+                Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+    // Show detected matches
+    imshow("Good Matches", img_matches);
     waitKey();
-//    return/* 0;
 
+    // Publish results to ROS ------------------------------------------------------------------------------------------
     while (ros::ok()) {
         pcl_pub.publish(ros_pcl_msg);
         ros::spinOnce();
         loop_rate.sleep();
     }
-
     return 0;
+}
 
 
 //    //-- Draw matches-------------------------------------------------------------
@@ -259,4 +246,165 @@ int main( int argc, char* argv[] )
 //    imshow("SURF Keypoints", img_keypoints );
 //    waitKey();
 //    return 0;
-}
+
+
+//
+//
+//
+//
+//
+//
+//int main( int argc, char* argv[] )
+//{
+//    // Initialize ROS Node-----------------------------------------------------
+//    ros::init(argc, argv, "feature_detection");
+//    ros::NodeHandle n;
+//    ros::Publisher pcl_pub = n.advertise<sensor_msgs::PointCloud>("reconstruction_pcl2", 10);
+//    ros::Rate loop_rate(10);
+//
+//    // -----------------------------------------------------------------------------
+//    Mat img1 = imread("/home/amy/robo_ws/src/computer_vision/img/fountain0.jpg", IMREAD_GRAYSCALE );
+//    Mat img2 = imread("/home/amy/robo_ws/src/computer_vision/img/fountain1.jpg", IMREAD_GRAYSCALE );
+//
+//
+//    if ( img1.empty() || img2.empty())
+//    {
+//        cout << "Could not open or find the image!\n" << endl;
+//        cout << "Usage: " << argv[0] << " <Input image>" << endl;
+//        return -1;
+//    }
+//
+//    //-- Step 1: Detect the keypoints using SURF Detector
+//    int minHessian = 400;
+//    Ptr<SURF> detector = SURF::create( minHessian );
+//
+//    // Initialize keypoints and descriptors
+//    std::vector<KeyPoint> keypoints1, keypoints2;
+//    Mat descriptors1, descriptors2;
+//
+//    // Detect keypoints and create descriptors
+//    detector->detectAndCompute( img1, noArray(), keypoints1, descriptors1 );
+//    detector->detectAndCompute( img2, noArray(), keypoints2, descriptors2 );
+//
+//    //-- Step 2: Matching descriptor vectors with a FLANN based matcher
+//    // Since SURF is a floating-point descriptor NORM_L2 is used
+//    Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create(DescriptorMatcher::FLANNBASED);
+//    std::vector< std::vector<DMatch> > knn_matches;
+//    matcher->knnMatch( descriptors1, descriptors2, knn_matches, 2 );
+//    //-- Filter matches using the Lowe's ratio test
+//    const float ratio_thresh = 0.7f;
+//    std::vector<DMatch> good_matches;
+//    for (size_t i = 0; i < knn_matches.size(); i++)
+//    {
+//        if (knn_matches[i][0].distance < ratio_thresh * knn_matches[i][1].distance)
+//        {
+//            good_matches.push_back(knn_matches[i][0]);
+//        }
+//    }
+//
+//    //    std::vector<DMatch> n_first_matches(good_matches.begin(), good_matches.begin() + 10);
+//
+//    // Find camera matrices -------------------------------------------------------------------------------------
+//    std::vector<Point2f>imgpts1,imgpts2;
+//    for( unsigned int i = 0; i<good_matches.size(); i++ ){
+//        // queryIdx is the "left" image
+//        imgpts1.push_back(keypoints1[good_matches[i].queryIdx].pt);
+//        // trainIdx is the "right" image
+//        imgpts2.push_back(keypoints2[good_matches[i].trainIdx].pt);
+//    }
+//    // TODO: Replace K with camera info topic
+//    // Kinect Calibration
+////    float k_arr[9] = {540.707803103922, 0.0, 322.35464797552, 0.0, 538.1654785489391, 242.2561047778664, 0.0, 0.0, 1.0};
+//    // Benchmark Photo Calibration
+//    float k_arr[9] = {2759.48, 0, 1520.69, 0, 2764.16, 1006.81, 0, 0, 1};
+//
+//    Mat_<double> K = cv::Mat(3, 3, CV_32F, k_arr);
+//
+//    cv::Mat Kinv;
+//    invert(K, Kinv);
+////    cout << "Camera Calibration K:" << endl;
+////    cout << K << endl;
+////    cout << "Inverse of K:" << endl;
+////    cout << Kinv << endl;
+//////    FindCameraMatrices(K, )
+//
+//
+//
+//
+//
+//
+//
+//
+////    cout << K << endl;
+////
+////    Mat F = findFundamentalMat(imgpts1, imgpts2, FM_RANSAC, 0.1, 0.99);
+////    cout << F << endl;
+////    Mat_<double> E = K.t() * F * K; //according to HZ (9.12)
+////
+////    // Decompose essential matrix into rotation and translation elements --------------------------------------------
+////    SVD svd(E);
+////    Matx33d W(0,-1,0,//HZ 9.13
+////              1,0,0,
+////              0,0,1);
+////    Mat_<double> R = svd.u * Mat(W) * svd.vt; //HZ 9.19
+////    Mat_<double> t = svd.u.col(2); //u3
+////    Matx34d P1( R(0,0),R(0,1), R(0,2), t(0),
+////                R(1,0),R(1,1), R(1,2), t(1),
+////                R(2,0),R(2,1), R(2,2), t(2));
+////
+////
+////    // Rotation & translation matrices!!!
+////    cout << t << endl;
+////    cout << R << endl;
+////
+////    cout << CheckCoherentRotation(R) << endl;
+////
+////    // Triangulation ---------------------------------------------------------------------------------------------------
+////    cv::Mat Kinv;
+////    invert(K, Kinv);
+////
+////    // Initial perspective is fixed with no rotation and no translation
+////    Matx34d P( 1, 0, 0, 0,
+////               0, 1, 0, 0,
+////               0, 0, 1, 0);
+////
+////    std::vector<Point3d> pointcloud;
+////
+////    TriangulatePoints(keypoints1, keypoints2, K, Kinv, P, P1, pointcloud);
+////////    const std::vector<KeyPoint>& pt_set1,
+////////    const std::vector<KeyPoint>& pt_set2,
+////////    const Mat&Kinv,
+////////    const Matx34d& P,
+////////    const Matx34d& P1,
+////////    std::vector<Point3d>& pointcloud)
+////
+////
+////
+////    // Convert from pointcloud to ROS message
+////    // TODO: Move this somewhere else
+////    sensor_msgs::PointCloud ros_pcl_msg;
+////    ros_pcl_msg.header.frame_id = "map";
+////    ros_pcl_msg.header.stamp = ros::Time::now();
+////
+////    for(Point3d pt : pointcloud) {
+////        geometry_msgs::Point32 new_pt;
+////        new_pt.x = pt.x;
+////        new_pt.y = pt.y;
+////        new_pt.z = pt.z;
+////
+////        ros_pcl_msg.points.push_back(new_pt);
+////    }
+////
+////    //-- Draw matches-------------------------------------------------------------
+//////    Mat img_matches;
+//////    drawMatches( img1, keypoints1, img2, keypoints2, good_matches, img_matches, Scalar::all(-1),
+//////                 Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
+//////    //-- Show detected matches
+//////    imshow("Good Matches", img_matches );
+//////    waitKey();
+////
+////    while (ros::ok()) {
+////        pcl_pub.publish(ros_pcl_msg);
+////        ros::spinOnce();
+////        loop_rate.sleep();
+////    }
