@@ -63,23 +63,22 @@ Mat_<double> LinearLSTriangulation(
     return X;
 }
 
-double TriangulatePoints(
-        const vector<KeyPoint>& pt_set1,
-        const vector<KeyPoint>& pt_set2,
+void TriangulatePoints(
+        const vector<Point2f>& pt_set1,
+        const vector<Point2f>& pt_set2,
         const Mat& K,
         const Mat& Kinv,
         const Matx34d& P,
         const Matx34d& P1,
-        vector<Point3d>& pointcloud)
-{
+        vector<Point3d>& pointcloud) {
     vector<double> reproj_error;
     for (unsigned int i=0; i<pt_set1.size(); i++) {
 //convert to normalized homogeneous coordinates
-        Point2f kp = pt_set1[i].pt;
+        Point2f kp = pt_set1[i];
         Point3d u(kp.x,kp.y,1.0);
         Mat_<double> um = Kinv * Mat_<double>(u);
         u = um.at<Point3d>(0);
-        Point2f kp1 = pt_set2[i].pt;
+        Point2f kp1 = pt_set2[i];
         Point3d u1(kp1.x,kp1.y,1.0);
         Mat_<double> um1 = Kinv * Mat_<double>(u1);
         u1 = um1.at<Point3d>(0);
@@ -88,16 +87,16 @@ double TriangulatePoints(
         Mat_<double> X = LinearLSTriangulation(u,P,u1,P1);
 
 //calculate reprojection error (breaks for some reason? Matrix sizes don't agree
-        Mat_<double> xPt_img = K * Mat(P1) * X;
-        Point2f xPt_img_(xPt_img(0)/xPt_img(2),xPt_img(1)/xPt_img(2));
-        reproj_error.push_back(norm(xPt_img_-kp1));
+//        Mat_<double> xPt_img = K * Mat(P1) * X;
+//        Point2f xPt_img_(xPt_img(0)/xPt_img(2),xPt_img(1)/xPt_img(2));
+//        reproj_error.push_back(norm(xPt_img_-kp1));
 
 //store 3D point
         pointcloud.push_back(Point3d(X(0),X(1),X(2)));
     }
 //return mean reprojection error
-    Scalar me = mean(reproj_error);
-    return me[0];
+//    Scalar me = mean(reproj_error);
+//    return me[0];
 }
 
 void FindCameraMatrices(const Mat& K,
@@ -236,34 +235,30 @@ int main( int argc, char* argv[] ) {
 //    cout << t << endl;
 //    cout << R << endl;
 //
-//    // Triangulation ---------------------------------------------------------------------------------------------------
-//    cv::Mat Kinv;
-//    invert(K, Kinv);
-//
-//    // Initial perspective is fixed with no rotation and no translation
-//    Matx34d P(1, 0, 0, 0,
-//              0, 1, 0, 0,
-//              0, 0, 1, 0);
-//
-//    vector<Point3d> pointcloud;
-//
-//    TriangulatePoints(keypoints1, keypoints2, K, Kinv, P, P1, pointcloud);
-//
-//    // Convert from pointcloud to ROS message ------------------------------------------------------------------
-//    // TODO: Move this somewhere else
-//    sensor_msgs::PointCloud ros_pcl_msg;
-//    ros_pcl_msg.header.frame_id = "map";
-//    ros_pcl_msg.header.stamp = ros::Time::now();
-//
-//    for (Point3d pt : pointcloud) {
-//        geometry_msgs::Point32 new_pt;
-//        new_pt.x = pt.x;
-//        new_pt.y = pt.y;
-//        new_pt.z = pt.z;
-//
-//        ros_pcl_msg.points.push_back(new_pt);
-//    }
-//
+    // Triangulation ---------------------------------------------------------------------------------------------------
+    // Initial perspective is fixed with no rotation and no translation
+    Matx34d P(1, 0, 0, 0,
+              0, 1, 0, 0,
+              0, 0, 1, 0);
+
+    vector<Point3d> pointcloud;
+    TriangulatePoints(imgpts1, imgpts2, K, Kinv, P, P1, pointcloud);
+
+    // Convert from pointcloud to ROS message ------------------------------------------------------------------
+    // TODO: Move this somewhere else
+    sensor_msgs::PointCloud ros_pcl_msg;
+    ros_pcl_msg.header.frame_id = "map";
+    ros_pcl_msg.header.stamp = ros::Time::now();
+
+    for (Point3d pt : pointcloud) {
+        geometry_msgs::Point32 new_pt;
+        new_pt.x = pt.x;
+        new_pt.y = pt.y;
+        new_pt.z = pt.z;
+
+        ros_pcl_msg.points.push_back(new_pt);
+    }
+
 //    // Draw matches -------------------------------------------------------------------------------------------------
 //    Mat img_matches;
 //    drawMatches(img1, keypoints1, img2, keypoints2, good_matches, img_matches, Scalar::all(-1),
@@ -272,12 +267,13 @@ int main( int argc, char* argv[] ) {
 //    imshow("Good Matches", img_matches);
 //    waitKey();
 
-//    // Publish results to ROS ------------------------------------------------------------------------------------------
-//    while (ros::ok()) {
-//        pcl_pub.publish(ros_pcl_msg);
-//        ros::spinOnce();
-//        loop_rate.sleep();
-//    }
+    // Publish results to ROS ------------------------------------------------------------------------------------------
+    while (ros::ok()) {
+        cout << ros_pcl_msg.points.size() << endl;
+        pcl_pub.publish(ros_pcl_msg);
+        ros::spinOnce();
+        loop_rate.sleep();
+    }
     cout << "Reached End" << endl;
     return 0;
 }
