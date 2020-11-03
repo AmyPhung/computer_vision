@@ -35,6 +35,48 @@ using namespace std;
  * P = [555.9996948242188, 0.0, 322.44680611515287, 0.0, 0.0, 552.9210205078125, 238.24188986985973, 0.0, 0.0, 0.0, 1.0, 0.0]
  */
 
+int displayImg(Mat img)
+{
+    imshow("Display Window", img);
+    int k = waitKey(0);
+    return k;
+}
+
+// height_or_width - true: resize around height
+//                   false: resize around width
+// side_lenght - the size of the new height or width
+// img - input image to be resized
+// out_img - the resized image
+void resizeImg(Mat img, Mat& out_img, bool height_or_width, int side_length)
+{
+    // TODO: Generalize the logic in this function
+
+    // std::cout << "Source image rows: " << img.rows << " | Source image cols: " << img.cols << std::endl;
+
+    // Stop if the image is already the correct size
+    if ( (height_or_width && img.rows == side_length) || !height_or_width && img.cols == side_length )
+    {
+        // std::cout << "Image is already the correct size" << std::endl;
+        out_img = img;
+        return;
+    }
+
+    // Calculate a rescaling factor according to height or width
+    double rescale_factor;
+    if (height_or_width) { rescale_factor = ( (double) side_length) / ( (double) img.rows); } // height
+    else { rescale_factor = ( (double) side_length) / ( (double) img.cols); } // width
+
+    // std::cout << "Rescaling factor: " << rescale_factor << std::endl;
+
+    // Set the interpolation method
+    int interpolation_method;
+    if (rescale_factor > 1) { interpolation_method = INTER_CUBIC; }
+    else { interpolation_method = INTER_LINEAR; }
+
+    // Resize the image accordingly
+    resize(img, out_img, Size(), rescale_factor, rescale_factor, interpolation_method);
+}
+
 bool CheckCoherentRotation(cv::Mat_<double>& R) {
     if(fabsf(determinant(R))-1.0 > 1e-07) {
         cerr<<"det(R) != +-1.0, this is not a rotation matrix"<<endl;
@@ -77,15 +119,17 @@ void getKeypointColors(const vector<Point2f>& imgpts, vector<Vec3b>& colors, con
     }
 }
 
+// Returns fundamental matrix
 void FindCameraMatrices(const Mat& K,
                         const vector<Point2f>& imgpts1,
                         const vector<Point2f>& imgpts2,
                         Matx34d& P1,
                         Mat_<double>& R,
-                        Mat_<double>& t) {
+                        Mat_<double>& t,
+                        Mat& F) {
     //Find camera matrices
     //Get Fundamental Matrix
-    Mat F = findFundamentalMat(imgpts1, imgpts2, FM_RANSAC, 0.1, 0.99);
+    F = findFundamentalMat(imgpts1, imgpts2, FM_RANSAC, 0.1, 0.99);
     //Essential matrix: compute then extract cameras [R|t]
     Mat_<double> E = K.t() * F * K; //according to HZ (9.12)
     //decompose E to P' , HZ (9.19)
@@ -145,17 +189,24 @@ int main( int argc, char* argv[] ) {
     ros::Rate loop_rate(10);
 
     // Detect Keypoints & create descriptors --------------------------------------------------------------------------
-    Mat img1 = imread("/home/amy/robo_ws/src/computer_vision/img/fountain0.jpg", IMREAD_GRAYSCALE);
-    Mat img2 = imread("/home/amy/robo_ws/src/computer_vision/img/fountain1.jpg", IMREAD_GRAYSCALE);
-    Mat color_img = imread("/home/amy/robo_ws/src/computer_vision/img/fountain0.jpg");
+    // std::string ws_path = "/home/amy/robo_ws";
+    std::string ws_path = "/home/egonzalez/catkin_ws";
+    Mat img1_color = imread( ws_path + "/src/computer_vision/img/fountain0.jpg", IMREAD_COLOR );
+    Mat img2_color = imread( ws_path + "/src/computer_vision/img/fountain1.jpg", IMREAD_COLOR );
 
-    if (img1.empty() || img2.empty()) {
+    if (img1_color.empty() || img2_color.empty()) {
         cout << "Could not open or find the image!\n" << endl;
         cout << "Usage: " << argv[0] << " <Input image>" << endl;
         return -1;
     }
 
-    // Detect the keypoints using SURF Detector
+    Mat img1;
+    Mat img2;
+
+    cvtColor(img1_color, img1, COLOR_BGR2GRAY);
+    cvtColor(img2_color, img2, COLOR_BGR2GRAY);
+
+    //-- Step 1: Detect the keypoints using SURF Detector
     int minHessian = 400;
     Ptr<SURF> detector = SURF::create(minHessian);
 
@@ -208,7 +259,8 @@ int main( int argc, char* argv[] ) {
     Matx34d P1;
     Mat_<double> R;
     Mat_<double> t;
-    FindCameraMatrices(K, imgpts1, imgpts2, P1, R, t);
+    Mat F;
+    FindCameraMatrices(K, imgpts1, imgpts2, P1, R, t, F);
 
     cv::Mat Rt0 = cv::Mat::eye(3, 4, CV_64FC1);
     cv::Mat Rt1 = cv::Mat::eye(3, 4, CV_64FC1);
@@ -225,7 +277,7 @@ int main( int argc, char* argv[] ) {
 
     // Extract keypoint colors
     vector<Vec3b> keypoint_colors;
-    getKeypointColors(imgpts1, keypoint_colors, color_img);
+    getKeypointColors(imgpts1, keypoint_colors, img1_color);
 
     // Visualize camera positions in ROS ------------------------------------------------------------------------------
     // Invert matrix to get tf between map and camera instead of camera to map
@@ -235,6 +287,61 @@ int main( int argc, char* argv[] ) {
     // Convert from euler angles to quaternion
     tf2::Quaternion cam_quat;
     cam_quat.setRPY( cam_euler[0], cam_euler[1],cam_euler[2] );
+
+    // Draw Epi Polar Lines -------------------------------------------------------------------------------------------------
+
+    // Compute the epilines
+
+    // Grab a subsample of matched points
+    std::vector<Point2f> imgpts1_subsample, imgpts2_subsample;
+    int num_pts = 8;
+    for ( int i = 0; i < num_pts; i++ )
+    {
+        imgpts1_subsample.emplace_back(imgpts1[i]);
+        imgpts2_subsample.emplace_back(imgpts2[i]);
+    }
+
+    // Compute the epilines
+    // epilines number corresponds to image those epilines are drawn on
+    std::vector<Vec3f> epilines2;
+    std::vector<Vec3f> epilines1;
+    computeCorrespondEpilines(imgpts1_subsample, 1, F, epilines2);
+    computeCorrespondEpilines(imgpts2_subsample, 2, F, epilines1);
+
+    // Set up colors for epilines - BGR
+    std::vector<Scalar> color_palette;
+    color_palette.emplace_back(Scalar(217, 198, 255)); // pink
+    color_palette.emplace_back(Scalar(60, 51, 248));   // red
+    color_palette.emplace_back(Scalar(16, 171, 252));  // yellow-orange
+    color_palette.emplace_back(Scalar(179, 158, 43));  // cyan
+    color_palette.emplace_back(Scalar(105, 175, 68));  // green
+    color_palette.emplace_back(Scalar(128, 90, 61));   // dark blue
+    color_palette.emplace_back(Scalar(38, 40, 28));    // grey
+    color_palette.emplace_back(Scalar(20, 8, 61));     // brown
+
+    for ( int i = 0; i < epilines2.size(); i++ )
+    {
+        // Calculate endpoints
+        Point endpoint1 = cv::Point(0, -epilines2[i][2] / epilines2[i][1]);
+        Point endpoint2 = cv::Point(img2_color.cols, -( epilines2[i][2] + epilines2[i][0] * img2_color.cols ) / epilines2[i][1] );
+
+        // Get the color
+        Scalar color = color_palette[i % num_pts];
+
+        // Draw the epiline on image 2
+        line(img2_color, endpoint1, endpoint2, color, 3);
+
+        // Draw the corresponding keypoint on image 1
+        circle(img1_color, imgpts1[i], 20, color, 5);
+    }
+
+    // Display epipolar lines and corresponding keypoints
+    Mat img1_display, img2_display;
+    resizeImg(img2_color, img2_display, true, 500);
+    resizeImg(img1_color, img1_display, true, 500);
+    Mat dual_img_display;
+    hconcat(img1_display, img2_display, dual_img_display);
+    displayImg(dual_img_display);
 
     // TODO: Display cameras in RVIZ
     cout << "Camera 2 Rotation & Translation" << endl;
@@ -296,6 +403,7 @@ int main( int argc, char* argv[] ) {
 
     // Publish results to ROS ------------------------------------------------------------------------------------------
     while (ros::ok()) {
+        // cout << ros_pcl_msg.points.size() << endl;
         pcl_pub.publish(ros_pcl_msg);
 
         cam2_pose_pub.publish(cam2_pose_msg);
