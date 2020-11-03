@@ -194,11 +194,11 @@ int main( int argc, char* argv[] ) {
 
     //-- Step 2: Matching descriptor vectors with a FLANN based matcher
     // Since SURF is a floating-point descriptor NORM_L2 is used
-    Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create(DescriptorMatcher::FLANNBASED);
+    Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create(DescriptorMatcher::BRUTEFORCE);
     vector<vector<DMatch> > knn_matches;
     matcher->knnMatch(descriptors1, descriptors2, knn_matches, 2);
     //-- Filter matches using the Lowe's ratio test
-    const float ratio_thresh = 0.7f;
+    const float ratio_thresh = 0.3f;
     vector<DMatch> good_matches;
     for (size_t i = 0; i < knn_matches.size(); i++) {
         if (knn_matches[i][0].distance < ratio_thresh * knn_matches[i][1].distance) {
@@ -315,13 +315,15 @@ int main( int argc, char* argv[] ) {
         ros_pcl_msg.points.push_back(new_pt);
     }
 
-//    // Draw matches -------------------------------------------------------------------------------------------------
-//    Mat img_matches;
-//    drawMatches(img1, keypoints1, img2, keypoints2, good_matches, img_matches, Scalar::all(-1),
-//                Scalar::all(-1), vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
-//    // Show detected matches
-//    imshow("Good Matches", img_matches);
-//    waitKey();
+    // Draw matches -------------------------------------------------------------------------------------------------
+    Mat img_matches;
+    drawMatches(img1, keypoints1, img2, keypoints2, good_matches, img_matches, Scalar::all(-1),
+                Scalar::all(-1), vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+    // Show detected matches
+    namedWindow("Good Matches",WINDOW_NORMAL);
+    imshow("Good Matches", img_matches);
+    resizeWindow("Good Matches", 500,500);
+    waitKey();
 
     // Publish results to ROS ------------------------------------------------------------------------------------------
     while (ros::ok()) {
