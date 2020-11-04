@@ -282,7 +282,7 @@ int main( int argc, char* argv[] ) {
                       cv::Point2f(selected_points2[i].x + image1.cols, selected_points2[i].y),
                       1, 1, 0 );
         }
-//        cv::imwrite("match-result.png", src);
+        cv::imwrite("match-result.png", src);
     }
 
     cv::Mat Kd;
@@ -381,14 +381,32 @@ int main( int argc, char* argv[] ) {
 ////    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
 ////    cloud->points.resize (point3d_homo.cols);
 ////
+    // Convert from pointcloud to ROS message ------------------------------------------------------------------
+    // TODO: Move this somewhere else
+    sensor_msgs::PointCloud ros_pcl_msg;
+    ros_pcl_msg.header.frame_id = "map";
+    ros_pcl_msg.header.stamp = ros::Time::now();
+
+//    sensor_msgs::ChannelFloat32 new_pt_b;
+//    sensor_msgs::ChannelFloat32 new_pt_g;
+//    sensor_msgs::ChannelFloat32 new_pt_r;
+//    new_pt_b.name = "b";
+//    new_pt_g.name = "g";
+//    new_pt_r.name = "r";
+
     for(int i = 0; i < point3d_homo.cols; i++) {
 
 //        pcl::PointXYZRGB &point = cloud->points[i];
+        geometry_msgs::Point32 new_pt;
         cv::Mat p3d;
         cv::Mat _p3h = point3d_homo.col(i);
         cv::Mat _p3h_T = _p3h.t();
         convertPointsFromHomogeneous(_p3h_T, p3d);
-        cout<<p3d.at<double>(2)<<endl;
+//        cout<<p3d.at<double>(2)<<endl;
+        new_pt.x = p3d.at<double>(0);
+        new_pt.y = p3d.at<double>(1);
+        new_pt.z = p3d.at<double>(2);
+        ros_pcl_msg.points.push_back(new_pt);
 //        point.x = p3d.at<double>(0);
 //        point.y = p3d.at<double>(1);
 //        point.z = p3d.at<double>(2);
@@ -396,6 +414,42 @@ int main( int argc, char* argv[] ) {
 //        point.g = 0;
 //        point.b = 255;
     }
+
+    // Publish results to ROS ------------------------------------------------------------------------------------------
+    while (ros::ok()) {
+        cout << ros_pcl_msg.points.size() << endl;
+        pcl_pub.publish(ros_pcl_msg);
+
+//        cam2_pose_pub.publish(cam2_pose_msg);
+        ros::spinOnce();
+        loop_rate.sleep();
+    }
+
+
+//
+//    for (int i=0; i<pointcloud.size(); i++) {
+//        // Add point to ROS message
+//        Point3d pt = pointcloud[i];
+//        geometry_msgs::Point32 new_pt;
+//
+//        new_pt.x = pt.x;
+//        new_pt.y = pt.y;
+//        new_pt.z = pt.z;
+//
+//        ros_pcl_msg.points.push_back(new_pt);
+//
+//        // Add color info to ROS message
+//        Vec3b pt_color = colors[i];
+//        // Convert to floating point values between 0 and 1
+//        new_pt_b.values.push_back(pt_color[0]/255.0f);
+//        new_pt_g.values.push_back(pt_color[1]/255.0f);
+//        new_pt_r.values.push_back(pt_color[2]/255.0f);
+//    }
+//    ros_pcl_msg.channels.push_back(new_pt_b);
+//    ros_pcl_msg.channels.push_back(new_pt_g);
+//    ros_pcl_msg.channels.push_back(new_pt_r);
+
+
 //
 //    viewer.addPointCloud(cloud, "Triangulated Point Cloud");
 //    viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
