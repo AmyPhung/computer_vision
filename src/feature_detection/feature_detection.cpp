@@ -290,11 +290,9 @@ int main( int argc, char* argv[] ) {
 
     // Draw Epi Polar Lines -------------------------------------------------------------------------------------------------
 
-    // Compute the epilines
-
     // Grab a subsample of matched points
     std::vector<Point2f> imgpts1_subsample, imgpts2_subsample;
-    int num_pts = 8;
+    int num_pts = 30;
     for ( int i = 0; i < num_pts; i++ )
     {
         imgpts1_subsample.emplace_back(imgpts1[i]);
@@ -319,29 +317,55 @@ int main( int argc, char* argv[] ) {
     color_palette.emplace_back(Scalar(38, 40, 28));    // grey
     color_palette.emplace_back(Scalar(20, 8, 61));     // brown
 
+    // Make copies of each image for drawing
+    Mat img2_keypoints = img2_color.clone();
+    Mat img2_epilines = img2_color.clone();
+    Mat img1_keypoints = img1_color.clone();
+    Mat img1_epilines = img1_color.clone();
+
+    // Draw keypoints and corresponding epilines
     for ( int i = 0; i < epilines2.size(); i++ )
     {
-        // Calculate endpoints
+        // Get the color
+        Scalar color = color_palette[i % color_palette.size()];
+
+        // Calculate endpoints for epilines on image 2
         Point endpoint1 = cv::Point(0, -epilines2[i][2] / epilines2[i][1]);
         Point endpoint2 = cv::Point(img2_color.cols, -( epilines2[i][2] + epilines2[i][0] * img2_color.cols ) / epilines2[i][1] );
 
-        // Get the color
-        Scalar color = color_palette[i % num_pts];
-
         // Draw the epiline on image 2
-        line(img2_color, endpoint1, endpoint2, color, 3);
+        line(img2_epilines, endpoint1, endpoint2, color, 3);
 
         // Draw the corresponding keypoint on image 1
-        circle(img1_color, imgpts1[i], 20, color, 5);
+        circle(img1_keypoints, imgpts1[i], 20, color, 5);
+
+        // Calculate endpoints for epilines on image 1
+        Point endpoint1a = cv::Point(0, -epilines1[i][2] / epilines1[i][1]);
+        Point endpoint2a = cv::Point(img1_color.cols, -( epilines1[i][2] + epilines1[i][0] * img1_color.cols ) / epilines1[i][1] );
+
+        // Draw the epiline on image 2
+        line(img1_epilines, endpoint1a, endpoint2a, color, 3);
+
+        // Draw the corresponding keypoint on image 1
+        circle(img2_keypoints, imgpts2[i], 20, color, 5);
     }
 
     // Display epipolar lines and corresponding keypoints
-    Mat img1_display, img2_display;
-    resizeImg(img2_color, img2_display, true, 500);
-    resizeImg(img1_color, img1_display, true, 500);
-    Mat dual_img_display;
-    hconcat(img1_display, img2_display, dual_img_display);
-    displayImg(dual_img_display);
+    Mat img1_keypoints_display, img2_keypoints_display;
+    Mat img2_epilines_display, img1_epilines_display;
+    resizeImg(img2_epilines, img2_epilines_display, true, 500);
+    resizeImg(img1_keypoints, img1_keypoints_display, true, 500);
+    resizeImg(img1_epilines, img1_epilines_display, true, 500);
+    resizeImg(img2_keypoints, img2_keypoints_display, true, 500);
+
+    Mat dual_img_display12, dual_img_display21;
+    hconcat(img1_keypoints_display, img2_epilines_display, dual_img_display12);
+    hconcat(img1_epilines_display, img2_keypoints_display, dual_img_display21);
+
+    Mat quad_img_display;
+    vconcat(dual_img_display12, dual_img_display21, quad_img_display);
+    displayImg(quad_img_display);
+
 
     // TODO: Display cameras in RVIZ
     cout << "Camera 2 Rotation & Translation" << endl;
