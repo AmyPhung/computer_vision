@@ -78,7 +78,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.009999999776482582
+      Size (m): 0.05000000074505806
       Style: Flat Squares
       Topic: /reconstruction_pcl2
       Unreliable: false
@@ -135,25 +135,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 4.663321018218994
+      Distance: 9.115591049194336
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.3860674202442169
-        Y: -0.3171235918998718
-        Z: 1.679245114326477
+        X: 1.742213249206543
+        Y: -0.47097906470298767
+        Z: 4.660876274108887
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.10479770600795746
+      Pitch: -1.4497969150543213
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.610374927520752
+      Yaw: 4.670409202575684
     Saved: ~
 Window Geometry:
   Displays:
