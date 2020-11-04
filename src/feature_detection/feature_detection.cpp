@@ -180,6 +180,85 @@ Vec3f rotationMatrixToEulerAngles(Mat &R) {
     return Vec3f(x, y, z);
 }
 
+int displayEpilines(Mat img1_color, Mat img2_color, std::vector<Point2f> imgpts1, std::vector<Point2f> imgpts2, Mat F, int numpts=30)
+{
+    // Grab a subsample of matched points
+    std::vector<Point2f> imgpts1_subsample, imgpts2_subsample;
+    for ( int i = 0; i < numpts; i++ )
+    {
+        imgpts1_subsample.emplace_back(imgpts1[i]);
+        imgpts2_subsample.emplace_back(imgpts2[i]);
+    }
+
+    // Compute the epilines
+    // epilines number corresponds to image those epilines are drawn on
+    std::vector<Vec3f> epilines2;
+    std::vector<Vec3f> epilines1;
+    computeCorrespondEpilines(imgpts1_subsample, 1, F, epilines2);
+    computeCorrespondEpilines(imgpts2_subsample, 2, F, epilines1);
+
+    // Set up colors for epilines - BGR
+    std::vector<Scalar> color_palette;
+    color_palette.emplace_back(Scalar(217, 198, 255)); // pink
+    color_palette.emplace_back(Scalar(60, 51, 248));   // red
+    color_palette.emplace_back(Scalar(16, 171, 252));  // yellow-orange
+    color_palette.emplace_back(Scalar(179, 158, 43));  // cyan
+    color_palette.emplace_back(Scalar(105, 175, 68));  // green
+    color_palette.emplace_back(Scalar(128, 90, 61));   // dark blue
+    color_palette.emplace_back(Scalar(38, 40, 28));    // grey
+    color_palette.emplace_back(Scalar(20, 8, 61));     // brown
+
+    // Make copies of each image for drawing
+    Mat img2_keypoints = img2_color.clone();
+    Mat img2_epilines = img2_color.clone();
+    Mat img1_keypoints = img1_color.clone();
+    Mat img1_epilines = img1_color.clone();
+
+    // Draw keypoints and corresponding epilines
+    for ( int i = 0; i < epilines2.size(); i++ )
+    {
+        // Get the color
+        Scalar color = color_palette[i % color_palette.size()];
+
+        // Calculate endpoints for epilines on image 2
+        Point endpoint1 = cv::Point(0, -epilines2[i][2] / epilines2[i][1]);
+        Point endpoint2 = cv::Point(img2_color.cols, -( epilines2[i][2] + epilines2[i][0] * img2_color.cols ) / epilines2[i][1] );
+
+        // Draw the epiline on image 2
+        line(img2_epilines, endpoint1, endpoint2, color, 3);
+
+        // Draw the corresponding keypoint on image 1
+        circle(img1_keypoints, imgpts1[i], 20, color, 5);
+
+        // Calculate endpoints for epilines on image 1
+        Point endpoint1a = cv::Point(0, -epilines1[i][2] / epilines1[i][1]);
+        Point endpoint2a = cv::Point(img1_color.cols, -( epilines1[i][2] + epilines1[i][0] * img1_color.cols ) / epilines1[i][1] );
+
+        // Draw the epiline on image 2
+        line(img1_epilines, endpoint1a, endpoint2a, color, 3);
+
+        // Draw the corresponding keypoint on image 1
+        circle(img2_keypoints, imgpts2[i], 20, color, 5);
+    }
+
+    // Display epipolar lines and corresponding keypoints
+    Mat img1_keypoints_display, img2_keypoints_display;
+    Mat img2_epilines_display, img1_epilines_display;
+    resizeImg(img2_epilines, img2_epilines_display, true, 500);
+    resizeImg(img1_keypoints, img1_keypoints_display, true, 500);
+    resizeImg(img1_epilines, img1_epilines_display, true, 500);
+    resizeImg(img2_keypoints, img2_keypoints_display, true, 500);
+
+    Mat dual_img_display12, dual_img_display21;
+    hconcat(img1_keypoints_display, img2_epilines_display, dual_img_display12);
+    hconcat(img1_epilines_display, img2_keypoints_display, dual_img_display21);
+
+    Mat quad_img_display;
+    vconcat(dual_img_display12, dual_img_display21, quad_img_display);
+    return displayImg(quad_img_display);
+}
+
+
 int main( int argc, char* argv[] ) {
     // Initialize ROS Node--------------------------------------------------------------------------------------------
     ros::init(argc, argv, "feature_detection");
@@ -289,83 +368,7 @@ int main( int argc, char* argv[] ) {
     cam_quat.setRPY( cam_euler[0], cam_euler[1],cam_euler[2] );
 
     // Draw Epi Polar Lines -------------------------------------------------------------------------------------------------
-
-    // Grab a subsample of matched points
-    std::vector<Point2f> imgpts1_subsample, imgpts2_subsample;
-    int num_pts = 30;
-    for ( int i = 0; i < num_pts; i++ )
-    {
-        imgpts1_subsample.emplace_back(imgpts1[i]);
-        imgpts2_subsample.emplace_back(imgpts2[i]);
-    }
-
-    // Compute the epilines
-    // epilines number corresponds to image those epilines are drawn on
-    std::vector<Vec3f> epilines2;
-    std::vector<Vec3f> epilines1;
-    computeCorrespondEpilines(imgpts1_subsample, 1, F, epilines2);
-    computeCorrespondEpilines(imgpts2_subsample, 2, F, epilines1);
-
-    // Set up colors for epilines - BGR
-    std::vector<Scalar> color_palette;
-    color_palette.emplace_back(Scalar(217, 198, 255)); // pink
-    color_palette.emplace_back(Scalar(60, 51, 248));   // red
-    color_palette.emplace_back(Scalar(16, 171, 252));  // yellow-orange
-    color_palette.emplace_back(Scalar(179, 158, 43));  // cyan
-    color_palette.emplace_back(Scalar(105, 175, 68));  // green
-    color_palette.emplace_back(Scalar(128, 90, 61));   // dark blue
-    color_palette.emplace_back(Scalar(38, 40, 28));    // grey
-    color_palette.emplace_back(Scalar(20, 8, 61));     // brown
-
-    // Make copies of each image for drawing
-    Mat img2_keypoints = img2_color.clone();
-    Mat img2_epilines = img2_color.clone();
-    Mat img1_keypoints = img1_color.clone();
-    Mat img1_epilines = img1_color.clone();
-
-    // Draw keypoints and corresponding epilines
-    for ( int i = 0; i < epilines2.size(); i++ )
-    {
-        // Get the color
-        Scalar color = color_palette[i % color_palette.size()];
-
-        // Calculate endpoints for epilines on image 2
-        Point endpoint1 = cv::Point(0, -epilines2[i][2] / epilines2[i][1]);
-        Point endpoint2 = cv::Point(img2_color.cols, -( epilines2[i][2] + epilines2[i][0] * img2_color.cols ) / epilines2[i][1] );
-
-        // Draw the epiline on image 2
-        line(img2_epilines, endpoint1, endpoint2, color, 3);
-
-        // Draw the corresponding keypoint on image 1
-        circle(img1_keypoints, imgpts1[i], 20, color, 5);
-
-        // Calculate endpoints for epilines on image 1
-        Point endpoint1a = cv::Point(0, -epilines1[i][2] / epilines1[i][1]);
-        Point endpoint2a = cv::Point(img1_color.cols, -( epilines1[i][2] + epilines1[i][0] * img1_color.cols ) / epilines1[i][1] );
-
-        // Draw the epiline on image 2
-        line(img1_epilines, endpoint1a, endpoint2a, color, 3);
-
-        // Draw the corresponding keypoint on image 1
-        circle(img2_keypoints, imgpts2[i], 20, color, 5);
-    }
-
-    // Display epipolar lines and corresponding keypoints
-    Mat img1_keypoints_display, img2_keypoints_display;
-    Mat img2_epilines_display, img1_epilines_display;
-    resizeImg(img2_epilines, img2_epilines_display, true, 500);
-    resizeImg(img1_keypoints, img1_keypoints_display, true, 500);
-    resizeImg(img1_epilines, img1_epilines_display, true, 500);
-    resizeImg(img2_keypoints, img2_keypoints_display, true, 500);
-
-    Mat dual_img_display12, dual_img_display21;
-    hconcat(img1_keypoints_display, img2_epilines_display, dual_img_display12);
-    hconcat(img1_epilines_display, img2_keypoints_display, dual_img_display21);
-
-    Mat quad_img_display;
-    vconcat(dual_img_display12, dual_img_display21, quad_img_display);
-    displayImg(quad_img_display);
-
+    (void) displayEpilines(img1_color, img2_color, imgpts1, imgpts2, F);
 
     // TODO: Display cameras in RVIZ
     cout << "Camera 2 Rotation & Translation" << endl;
