@@ -354,14 +354,18 @@ int main( int argc, char* argv[] ) {
 
 
     cv::Mat point3d_homo;
-        cv::Mat pnts3D(4,triangulation_points1.size(),CV_64FC4);
+//    cv::Mat pnts3D(4,triangulation_points1.size(),CV_64FC4);
+    cv::Mat cam0 = Kd * Rt0;
+    cv::Mat cam1 = Kd * Rt1;
     cout<<Kd * Rt0<<endl;
     cout<<Kd * Rt1<<endl;
     cout<<triangulation_points1<<endl;
     cout<<triangulation_points2<<endl;
+
+    cv::triangulatePoints(cam0, cam1,
+                          triangulation_points1, triangulation_points2, point3d_homo);
+
     cout<<point3d_homo<<endl;
-    cv::triangulatePoints(Kd * Rt0, Kd * Rt1,
-                          triangulation_points1, triangulation_points2,pnts3D);
     //point3d_homo is 64F
     //available input type is here
     //https://stackoverflow.com/questions/16295551/how-to-correctly-use-cvtriangulatepoints
@@ -377,20 +381,21 @@ int main( int argc, char* argv[] ) {
 ////    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
 ////    cloud->points.resize (point3d_homo.cols);
 ////
-//    for(int i = 0; i < point3d_homo.cols; i++) {
-//
-////        pcl::PointXYZRGB &point = cloud->points[i];
-//        cv::Mat p3d;
-//        cv::Mat _p3h = point3d_homo.col(i);
-//        convertPointsFromHomogeneous(_p3h.t(), p3d);
-//        cout<<p3d.at<double>(0)<<endl;
-////        point.x = p3d.at<double>(0);
-////        point.y = p3d.at<double>(1);
-////        point.z = p3d.at<double>(2);
-////        point.r = 0;
-////        point.g = 0;
-////        point.b = 255;
-//    }
+    for(int i = 0; i < point3d_homo.cols; i++) {
+
+//        pcl::PointXYZRGB &point = cloud->points[i];
+        cv::Mat p3d;
+        cv::Mat _p3h = point3d_homo.col(i);
+        cv::Mat _p3h_T = _p3h.t();
+        convertPointsFromHomogeneous(_p3h_T, p3d);
+        cout<<p3d.at<double>(2)<<endl;
+//        point.x = p3d.at<double>(0);
+//        point.y = p3d.at<double>(1);
+//        point.z = p3d.at<double>(2);
+//        point.r = 0;
+//        point.g = 0;
+//        point.b = 255;
+    }
 //
 //    viewer.addPointCloud(cloud, "Triangulated Point Cloud");
 //    viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE,
