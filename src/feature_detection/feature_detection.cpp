@@ -271,8 +271,10 @@ int main( int argc, char* argv[] ) {
     Mat_<double> t;
     FindCameraMatrices(K, imgpts1, imgpts2, P1, R, t);
 
+    // Invert matrix to get tf between map and camera instead of camera to map
+    Mat_<double> Rinv = R.inv();
     // Convert from rotation matrix to euler angles
-    Vec3f cam_euler = rotationMatrixToEulerAngles(R);
+    Vec3f cam_euler = rotationMatrixToEulerAngles(Rinv);
     // Convert from euler angles to quaternion
     tf2::Quaternion cam_quat;
     cam_quat.setRPY( cam_euler[0], cam_euler[1],cam_euler[2] );
@@ -290,9 +292,10 @@ int main( int argc, char* argv[] ) {
     cam2_pose_msg.pose.orientation.y = cam_quat.y();
     cam2_pose_msg.pose.orientation.z = cam_quat.z();
     cam2_pose_msg.pose.orientation.w = cam_quat.w();
-    cam2_pose_msg.pose.position.x = *t[0];
-    cam2_pose_msg.pose.position.y = *t[1];
-    cam2_pose_msg.pose.position.z = *t[2];
+    // Make translations negative (to go from map to camera instaed of camera to map)
+    cam2_pose_msg.pose.position.x = -*t[0];
+    cam2_pose_msg.pose.position.y = -*t[1];
+    cam2_pose_msg.pose.position.z = -*t[2];
 
 //    // Find camera matrices -------------------------------------------------------------------------------------
 //    vector<Point2f> imgpts1, imgpts2;
