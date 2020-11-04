@@ -18,6 +18,7 @@
 // ROS Stuff
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud.h>
+#include <sensor_msgs/ChannelFloat32.h>
 #include <geometry_msgs/Point32.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -101,6 +102,41 @@ void TriangulatePoints(
 //    return me[0];
 }
 
+// Modified triangulate points function that also finds color of each keypoint
+void TriangulatePointsWithColor(
+        const vector<KeyPoint>& pt_set1,
+        const vector<KeyPoint>& pt_set2,
+        const Mat& K,
+        const Mat& Kinv,
+        const Matx34d& P,
+        const Matx34d& P1,
+        vector<Point3d>& pointcloud,
+        vector<Vec3b>& colors,
+        const Mat& color_img) {
+    vector<double> reproj_error;
+    for (unsigned int i=0; i<pt_set1.size(); i++) {
+        //convert to normalized homogeneous coordinates
+        Point2f kp = pt_set1[i].pt;
+        Point3d u(kp.x,kp.y,1.0);
+        Mat_<double> um = Kinv * Mat_<double>(u);
+        u = um.at<Point3d>(0);
+        Point2f kp1 = pt_set2[i].pt;
+        Point3d u1(kp1.x,kp1.y,1.0);
+        Mat_<double> um1 = Kinv * Mat_<double>(u1);
+        u1 = um1.at<Point3d>(0);
+
+        //triangulate
+        Mat_<double> X = LinearLSTriangulation(u,P,u1,P1);
+
+        //store 3D point
+        pointcloud.push_back(Point3d(X(0),X(1),X(2)));
+
+        // Extract color info from image 1
+        Vec3b bgrPixel = color_img.at<Vec3b>(kp.y, kp.x); // Extracts in row, column (y, x) order
+        colors.push_back(bgrPixel);
+    }
+}
+
 void FindCameraMatrices(const Mat& K,
                         const vector<Point2f>& imgpts1,
                         const vector<Point2f>& imgpts2,
@@ -160,7 +196,6 @@ Vec3f rotationMatrixToEulerAngles(Mat &R) {
     return Vec3f(x, y, z);
 }
 
-
 int main( int argc, char* argv[] ) {
     // Initialize ROS Node--------------------------------------------------------------------------------------------
     ros::init(argc, argv, "feature_detection");
@@ -173,6 +208,8 @@ int main( int argc, char* argv[] ) {
     Mat img1 = imread("/home/amy/robo_ws/src/computer_vision/img/fountain0.jpg", IMREAD_GRAYSCALE);
     Mat img2 = imread("/home/amy/robo_ws/src/computer_vision/img/fountain1.jpg", IMREAD_GRAYSCALE);
 
+    // For pointcloud coloring
+    Mat color_img = imread("/home/amy/robo_ws/src/computer_vision/img/fountain0.jpg");
 
     if (img1.empty() || img2.empty()) {
         cout << "Could not open or find the image!\n" << endl;
@@ -298,7 +335,8 @@ int main( int argc, char* argv[] ) {
               0, 0, 1, 0);
 
     vector<Point3d> pointcloud;
-    TriangulatePoints(keypoints1, keypoints2, K, Kinv, P, P1, pointcloud);
+    vector<Vec3b> colors;
+    TriangulatePointsWithColor(keypoints1, keypoints2, K, Kinv, P, P1, pointcloud, colors, color_img);
 
     // Convert from pointcloud to ROS message ------------------------------------------------------------------
     // TODO: Move this somewhere else
@@ -306,14 +344,34 @@ int main( int argc, char* argv[] ) {
     ros_pcl_msg.header.frame_id = "map";
     ros_pcl_msg.header.stamp = ros::Time::now();
 
-    for (Point3d pt : pointcloud) {
+    sensor_msgs::ChannelFloat32 new_pt_b;
+    sensor_msgs::ChannelFloat32 new_pt_g;
+    sensor_msgs::ChannelFloat32 new_pt_r;
+    new_pt_b.name = "b";
+    new_pt_g.name = "g";
+    new_pt_r.name = "r";
+
+    for (int i=0; i<pointcloud.size(); i++) {
+        // Add point to ROS message
+        Point3d pt = pointcloud[i];
         geometry_msgs::Point32 new_pt;
+
         new_pt.x = pt.x;
         new_pt.y = pt.y;
         new_pt.z = pt.z;
 
         ros_pcl_msg.points.push_back(new_pt);
+
+        // Add color info to ROS message
+        Vec3b pt_color = colors[i];
+        // Convert to floating point values between 0 and 1
+        new_pt_b.values.push_back(pt_color[0]/255.0f);
+        new_pt_g.values.push_back(pt_color[1]/255.0f);
+        new_pt_r.values.push_back(pt_color[2]/255.0f);
     }
+    ros_pcl_msg.channels.push_back(new_pt_b);
+    ros_pcl_msg.channels.push_back(new_pt_g);
+    ros_pcl_msg.channels.push_back(new_pt_r);
 
     // Draw matches -------------------------------------------------------------------------------------------------
     Mat img_matches;
