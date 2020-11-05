@@ -15,6 +15,11 @@
 #include "opencv2/features2d.hpp"
 #include "opencv2/xfeatures2d.hpp"
 
+// Publishing images to ROS
+#include <cv_bridge/cv_bridge.h>
+#include <sensor_msgs/image_encodings.h>
+#include <image_transport/image_transport.h>
+
 // ROS Stuff
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud.h>
@@ -130,8 +135,10 @@ void FindCameraMatrices(const Mat& K,
     //Find camera matrices
     //Get Fundamental Matrix
     F = findFundamentalMat(imgpts1, imgpts2, FM_RANSAC, 0.1, 0.99);
+    std::cout << "Fundamental Matrix\n" << F << std::endl;
     //Essential matrix: compute then extract cameras [R|t]
     Mat_<double> E = K.t() * F * K; //according to HZ (9.12)
+    std::cout << "Essential Matrix\n" << E << std::endl;
     //decompose E to P' , HZ (9.19)
     SVD svd(E,SVD::MODIFY_A);
     Mat svd_u = svd.u;
@@ -180,7 +187,12 @@ Vec3f rotationMatrixToEulerAngles(Mat &R) {
     return Vec3f(x, y, z);
 }
 
-int displayEpilines(Mat img1_color, Mat img2_color, std::vector<Point2f> imgpts1, std::vector<Point2f> imgpts2, Mat F, int numpts=30)
+
+    // Mat epilines1, epilines2, epilines_quad_img_display, epilines_dual_img_display;
+    // calculateNumEpilines(imgpts1, imgpts2, F, epilines1, epilines2, 70);
+
+void calculateNumEpilines(vector<Point2f> imgpts1, vector<Point2f> imgpts2, Mat F,
+                          std::vector<Vec3f>& epilines1, std::vector<Vec3f>& epilines2, int numpts = 30)
 {
     // Grab a subsample of matched points
     std::vector<Point2f> imgpts1_subsample, imgpts2_subsample;
@@ -192,12 +204,13 @@ int displayEpilines(Mat img1_color, Mat img2_color, std::vector<Point2f> imgpts1
 
     // Compute the epilines
     // epilines number corresponds to image those epilines are drawn on
-    std::vector<Vec3f> epilines2;
-    std::vector<Vec3f> epilines1;
     computeCorrespondEpilines(imgpts1_subsample, 1, F, epilines2);
     computeCorrespondEpilines(imgpts2_subsample, 2, F, epilines1);
+}
 
-    // Set up colors for epilines - BGR
+std::vector<Scalar> getColorPalette()
+{
+    // Set up colors - BGR
     std::vector<Scalar> color_palette;
     color_palette.emplace_back(Scalar(217, 198, 255)); // pink
     color_palette.emplace_back(Scalar(60, 51, 248));   // red
@@ -207,7 +220,12 @@ int displayEpilines(Mat img1_color, Mat img2_color, std::vector<Point2f> imgpts1
     color_palette.emplace_back(Scalar(128, 90, 61));   // dark blue
     color_palette.emplace_back(Scalar(38, 40, 28));    // grey
     color_palette.emplace_back(Scalar(20, 8, 61));     // brown
+    return color_palette;
+}
 
+void createEpilinesQuadImgDisplay(Mat img1_color, Mat img2_color, std::vector<Point2f> imgpts1, std::vector<Point2f> imgpts2,
+                           Mat F, std::vector<Vec3f> epilines1, std::vector<Vec3f> epilines2, Mat& quad_img_display, std::vector<Scalar> color_palette)
+{
     // Make copies of each image for drawing
     Mat img2_keypoints = img2_color.clone();
     Mat img2_epilines = img2_color.clone();
@@ -253,9 +271,52 @@ int displayEpilines(Mat img1_color, Mat img2_color, std::vector<Point2f> imgpts1
     hconcat(img1_keypoints_display, img2_epilines_display, dual_img_display12);
     hconcat(img1_epilines_display, img2_keypoints_display, dual_img_display21);
 
-    Mat quad_img_display;
     vconcat(dual_img_display12, dual_img_display21, quad_img_display);
-    return displayImg(quad_img_display);
+}
+
+void createEpilinesDualImgDisplay(Mat img1_color, Mat img2_color, std::vector<Point2f> imgpts1, std::vector<Point2f> imgpts2,
+                           Mat F, std::vector<Vec3f> epilines1, std::vector<Vec3f> epilines2, Mat& dual_img_display, std::vector<Scalar> color_palette)
+{
+    // Make copies of each image for drawing
+    Mat img2_copy = img2_color.clone();
+    Mat img1_copy = img1_color.clone();
+
+    // Draw keypoints and corresponding epilines
+    for ( int i = 0; i < epilines2.size(); i++ )
+    {
+        // Get the color
+        Scalar color = color_palette[i % color_palette.size()];
+
+        // Calculate endpoints for epilines on image 2
+        Point endpoint1 = cv::Point(0, -epilines2[i][2] / epilines2[i][1]);
+        Point endpoint2 = cv::Point(img2_color.cols, -( epilines2[i][2] + epilines2[i][0] * img2_color.cols ) / epilines2[i][1] );
+
+        // Draw the epiline on image 2
+        line(img2_copy, endpoint1, endpoint2, color, 3);
+
+        // Draw the corresponding keypoint on image 1
+        circle(img1_copy, imgpts1[i], 20, color, 5);
+
+        // Calculate endpoints for epilines on image 1
+        Point endpoint1a = cv::Point(0, -epilines1[i][2] / epilines1[i][1]);
+        Point endpoint2a = cv::Point(img1_color.cols, -( epilines1[i][2] + epilines1[i][0] * img1_color.cols ) / epilines1[i][1] );
+
+        // Draw the epiline on image 2
+        line(img1_copy, endpoint1a, endpoint2a, color, 3);
+
+        // Draw the corresponding keypoint on image 1
+        circle(img2_copy, imgpts2[i], 20, color, 5);
+    }
+
+    // Display epipolar lines and corresponding keypoints
+    Mat img1_display, img2_display;
+    resizeImg(img2_copy, img2_display, true, 500);
+    resizeImg(img1_copy, img1_display, true, 500);
+
+    hconcat(img1_display, img2_display, dual_img_display);
+    // hconcat(img1_epilines_display, img2_keypoints_display, dual_img_display21);
+
+    // vconcat(dual_img_display12, dual_img_display21, quad_img_display);
 }
 
 
@@ -265,6 +326,24 @@ int main( int argc, char* argv[] ) {
     ros::NodeHandle n;
     ros::Publisher pcl_pub = n.advertise<sensor_msgs::PointCloud>("reconstruction_pcl2", 10);
     ros::Publisher cam2_pose_pub = n.advertise<geometry_msgs::PoseStamped>("cam2_pose", 10);
+
+    // Set up the image publishers for epiline visualizations
+    std::string quad_img_topic = "/epilines_quad_img";
+    std::string dual_img_topic = "/epilines_dual_img";
+    image_transport::ImageTransport it_quad(n);
+    image_transport::Publisher epilines_quad_image_pub = it_quad.advertise(quad_img_topic, 1);
+    image_transport::ImageTransport it_dual(n);
+    image_transport::Publisher epilines_dual_image_pub = it_quad.advertise(dual_img_topic, 1);
+
+    cv_bridge::CvImagePtr cv_ptr_epi_quad(new cv_bridge::CvImage);
+    cv_bridge::CvImagePtr cv_ptr_epi_dual(new cv_bridge::CvImage);
+
+    std::string img_encoding = "bgr8";
+    cv_ptr_epi_quad->encoding = img_encoding;
+    cv_ptr_epi_quad->header.frame_id = quad_img_topic;
+    cv_ptr_epi_dual->encoding = img_encoding;
+    cv_ptr_epi_dual->header.frame_id = dual_img_topic;
+
     ros::Rate loop_rate(10);
 
     // Detect Keypoints & create descriptors --------------------------------------------------------------------------
@@ -275,7 +354,6 @@ int main( int argc, char* argv[] ) {
 
     if (img1_color.empty() || img2_color.empty()) {
         cout << "Could not open or find the image!\n" << endl;
-        cout << "Usage: " << argv[0] << " <Input image>" << endl;
         return -1;
     }
 
@@ -302,7 +380,7 @@ int main( int argc, char* argv[] ) {
     matcher->knnMatch(descriptors1, descriptors2, knn_matches, 2);
     //-- Filter matches using the Lowe's ratio test
     // TODO: Make this a ros parameter
-    const float ratio_thresh = 0.7f;
+    const float ratio_thresh = 0.675f;
     vector<DMatch> good_matches;
     for (size_t i = 0; i < knn_matches.size(); i++) {
         if (knn_matches[i][0].distance < ratio_thresh * knn_matches[i][1].distance) {
@@ -341,6 +419,18 @@ int main( int argc, char* argv[] ) {
     Mat F;
     FindCameraMatrices(K, imgpts1, imgpts2, P1, R, t, F);
 
+    // std::cout << imgpts2 << std::endl;
+
+    // Get Visualizations for Epi Polar Lines -------------------------------------------------------------------------------------------------
+    std::vector<Vec3f> epilines1, epilines2;
+    Mat epilines_quad_img_display, epilines_dual_img_display;
+
+    calculateNumEpilines(imgpts1, imgpts2, F, epilines1, epilines2, 30);
+    createEpilinesQuadImgDisplay(img1_color, img2_color, imgpts1, imgpts2, F, epilines1, epilines2, epilines_quad_img_display, getColorPalette());
+    createEpilinesDualImgDisplay(img1_color, img2_color, imgpts1, imgpts2, F, epilines1, epilines2, epilines_dual_img_display, getColorPalette());
+    cv_ptr_epi_quad->image = epilines_quad_img_display;
+    cv_ptr_epi_dual->image = epilines_dual_img_display;
+
     cv::Mat Rt0 = cv::Mat::eye(3, 4, CV_64FC1);
     cv::Mat Rt1 = cv::Mat::eye(3, 4, CV_64FC1);
     R.copyTo(Rt1.rowRange(0, 3).colRange(0, 3));
@@ -366,9 +456,6 @@ int main( int argc, char* argv[] ) {
     // Convert from euler angles to quaternion
     tf2::Quaternion cam_quat;
     cam_quat.setRPY( cam_euler[0], cam_euler[1],cam_euler[2] );
-
-    // Draw Epi Polar Lines -------------------------------------------------------------------------------------------------
-    (void) displayEpilines(img1_color, img2_color, imgpts1, imgpts2, F);
 
     // TODO: Display cameras in RVIZ
     cout << "Camera 2 Rotation & Translation" << endl;
@@ -430,9 +517,13 @@ int main( int argc, char* argv[] ) {
 
     // Publish results to ROS ------------------------------------------------------------------------------------------
     while (ros::ok()) {
+        ros::Time time = ros::Time::now();
         // cout << ros_pcl_msg.points.size() << endl;
         pcl_pub.publish(ros_pcl_msg);
-
+        cv_ptr_epi_quad->header.stamp = time;
+        cv_ptr_epi_dual->header.stamp = time;
+        epilines_quad_image_pub.publish(cv_ptr_epi_quad->toImageMsg());
+        epilines_dual_image_pub.publish(cv_ptr_epi_dual->toImageMsg());
         cam2_pose_pub.publish(cam2_pose_msg);
         ros::spinOnce();
         loop_rate.sleep();
