@@ -1,3 +1,11 @@
+/*
+ * image_reconstruction.cpp
+ * Last edited: 11/10/2020
+ *
+ * Contains a ROS Node that publishes a colored pointcloud based on two images and a camera calibration matrix
+ * Tested with the fountain dataset found here: https://github.com/openMVG/SfM_quality_evaluation/tree/master/Benchmarking_Camera_Calibration_2008/fountain-P11/images
+ */
+
 #include <iostream>
 
 // One of these is for RANSAC
@@ -322,7 +330,7 @@ void createEpilinesDualImgDisplay(Mat img1_color, Mat img2_color, std::vector<Po
 
 int main( int argc, char* argv[] ) {
     // Initialize ROS Node--------------------------------------------------------------------------------------------
-    ros::init(argc, argv, "feature_detection");
+    ros::init(argc, argv, "image_reconstruction");
     ros::NodeHandle n;
     ros::Publisher pcl_pub = n.advertise<sensor_msgs::PointCloud>("reconstruction_pcl2", 10);
     ros::Publisher cam2_pose_pub = n.advertise<geometry_msgs::PoseStamped>("cam2_pose", 10);
@@ -347,8 +355,8 @@ int main( int argc, char* argv[] ) {
     ros::Rate loop_rate(10);
 
     // Detect Keypoints & create descriptors --------------------------------------------------------------------------
-    // std::string ws_path = "/home/amy/robo_ws";
-    std::string ws_path = "/home/egonzalez/catkin_ws";
+     std::string ws_path = "/home/amy/robo_ws";
+//    std::string ws_path = "/home/egonzalez/catkin_ws";
     Mat img1_color = imread( ws_path + "/src/computer_vision/img/fountain0.jpg", IMREAD_COLOR );
     Mat img2_color = imread( ws_path + "/src/computer_vision/img/fountain1.jpg", IMREAD_COLOR );
 
