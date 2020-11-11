@@ -148,9 +148,12 @@ We then attempted to visualize the computed relative camera positions, like so:
 
 While the z-axes were positioned as we’d expect, it seemed bizarre to us that the cameras were rotated almost 180 degrees off of each other since both images were taken with a camera that was right-side-up. We thought it might have something to do with our keypoint detection, so we went one step back and looked at the keypoint matches. When we did this, we found lots of matches that didn’t look right, and needed to adjust the ratio threshold for Lowe’s ratio test in order to improve our correspondences. After a bit of tuning, our correspondences looked a lot better.
 
-We also checked the epipolar lines - there were far too many lines to visualize, so we down-sampled a bit to get a better idea of what was going wrong
 
 ![good-looking correspondences - lines were pretty parallel and highlighted the same feature in both images](./img/good_correspondences.png)
+
+We also checked the epipolar lines - there were far too many lines to visualize, so we down-sampled a bit to get a better idea of what was going wrong
+
+![downsampled epipolar lines looked good - intersections were where we expected](./img/downsampled_epipolar.png)
 
 At this point, we were pretty confident in our keypoint matching since our correspondences and epipolar lines looked pretty good. Around this time, we also extracted color for each of our keypoints to make a colored pointcloud but our results were still not on par with what we expected to see.
 
