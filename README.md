@@ -131,10 +131,12 @@ Once we had that info, we would have the info we'd need to add in the new frame 
 4. Use the OpenCV solvePnPRansac function to compute the camera position based on these 3D points (for more details on how this works, this  thread has a wonderful explanation: [[reference](https://dsp.stackexchange.com/questions/2736/step-by-step-camera-pose-estimation-for-visual-tracking-and-planar-markers)])
 5. Use the triangulation function to compute the 3D positions for the other keypoint correspondences between the new and old frames that weren't already captured in the pointcloud
 
+While these additions would fix the relative scaling issue, it still wouldn't be particularly useful for odometry. To fix the absolute scaling issue, we would need to be able to measure at least one point in the system, whether it's the distance between the initial two poses, including a "calibration block" in the frame, or fusing our implementation with some sensor that measured depth.
 
 ## Challenges
 The primary challenge we ran into during this project was in debugging semantic errors since it was difficult to tell what wasn’t working properly. The first time we got the “data pipeline” between our raw kinect image to generating a pointcloud in RVIZ we got something that looked like this:
 
+![a colorless pointcloud with points everywhere incorrect](./img/error1.png)
 
 which didn’t really tell us what was wrong with our implementation. We weren’t exactly sure how to debug this from here, so we figured it’d be a good idea to at least get things running with the standard datasets instead of our custom dataset to make sure that this wasn’t caused by an issue with our camera calibration matrix.
 
@@ -142,32 +144,27 @@ After loading up the same dataset as the book ([reference](https://github.com/op
 
 We then attempted to visualize the computed relative camera positions, like so:
 
- While the z-axes were positioned as we’d expect, it seemed bizarre to us that the cameras were rotated almost 180 degrees off of each other since both images were taken with a camera that was right-side-up. We thought it might have something to do with our keypoint detection, so we went one step back and looked at the keypoint matches. When we did this, we found lots of matches that didn’t look right, and needed to adjust the ratio threshold for Lowe’s ratio test in order to improve our correspondences. After a bit of tuning, our correspondences looked a lot better.
+![incorrect camera transforms](./img/error2.png)
 
+While the z-axes were positioned as we’d expect, it seemed bizarre to us that the cameras were rotated almost 180 degrees off of each other since both images were taken with a camera that was right-side-up. We thought it might have something to do with our keypoint detection, so we went one step back and looked at the keypoint matches. When we did this, we found lots of matches that didn’t look right, and needed to adjust the ratio threshold for Lowe’s ratio test in order to improve our correspondences. After a bit of tuning, our correspondences looked a lot better.
 
+We also checked the epipolar lines - there were far too many lines to visualize, so we down-sampled a bit to get a better idea of what was going wrong
 
-We also checked the epipolar lines
-
-
-
-There were far too many lines to visualize, so we down-sampled a bit to get a better idea of what was going wrong
-
+![good-looking correspondences - lines were pretty parallel and highlighted the same feature in both images](./img/good_correspondences.png)
 
 At this point, we were pretty confident in our keypoint matching since our correspondences and epipolar lines looked pretty good. Around this time, we also extracted color for each of our keypoints to make a colored pointcloud but our results were still not on par with what we expected to see.
 
-
+![bad pointcloud, camera frames are still inverted](./img/inverse_camera.png)
 
 We realized that we had been visualizing our camera incorrectly all along - OpenCV returns the transform between the second camera to the first camera while we had been visualizing the inverse of that transform, so that needed to be fixed. After fixing that issue, our camera positions looked good, but our pointcloud was still far from what we expected
 
-At this point, we finally narrowed down our problem to be an issue with the triangulation function. We still aren’t sure what was wrong with our original approach, but after replacing our function with the OpenCV function, we got promising results
+At this point, we finally narrowed down our problem to be an issue with the triangulation function. We still aren’t sure what was wrong with our original approach, but after replacing our function with the OpenCV function, we got promising results.
 
-
-
-Through this project, we also ran into a number of other less interesting issues that we did find solutions to, including:
+Through this project, we also ran into a number of other less interesting issues that just took some time to find solutions to, including:
 + compiler issues with C++ and environment setup with OpenCV
 + random seg faults from not declaring variables properly
 + the OpenCV version used in the book was incompatible with the OS versions we were using
-+ NVIDIA driver issues caused RVIZ to act weird
++ NVIDIA driver issues causing RVIZ to act weird
 
 ## Lessons Learned
 We learned several important lessons as we worked through this project. Some of our key lessons learned include:
