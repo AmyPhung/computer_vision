@@ -48,27 +48,18 @@ using namespace std;
  * P = [555.9996948242188, 0.0, 322.44680611515287, 0.0, 0.0, 552.9210205078125, 238.24188986985973, 0.0, 0.0, 0.0, 1.0, 0.0]
  */
 
-int displayImg(Mat img)
-{
-    imshow("Display Window", img);
-    int k = waitKey(0);
-    return k;
-}
-
+// Resize an image
 // height_or_width - true: resize around height
 //                   false: resize around width
 // side_lenght - the size of the new height or width
 // img - input image to be resized
 // out_img - the resized image
-void resizeImg(Mat img, Mat& out_img, bool height_or_width, int side_length)
-{
+void resizeImg(Mat img, Mat& out_img, bool height_or_width, int side_length) {
     // TODO: Generalize the logic in this function
-
     // std::cout << "Source image rows: " << img.rows << " | Source image cols: " << img.cols << std::endl;
 
     // Stop if the image is already the correct size
-    if ( (height_or_width && img.rows == side_length) || !height_or_width && img.cols == side_length )
-    {
+    if ( (height_or_width && img.rows == side_length) || !height_or_width && img.cols == side_length ) {
         // std::cout << "Image is already the correct size" << std::endl;
         out_img = img;
         return;
@@ -78,7 +69,6 @@ void resizeImg(Mat img, Mat& out_img, bool height_or_width, int side_length)
     double rescale_factor;
     if (height_or_width) { rescale_factor = ( (double) side_length) / ( (double) img.rows); } // height
     else { rescale_factor = ( (double) side_length) / ( (double) img.cols); } // width
-
     // std::cout << "Rescaling factor: " << rescale_factor << std::endl;
 
     // Set the interpolation method
@@ -90,35 +80,35 @@ void resizeImg(Mat img, Mat& out_img, bool height_or_width, int side_length)
     resize(img, out_img, Size(), rescale_factor, rescale_factor, interpolation_method);
 }
 
-bool CheckCoherentRotation(cv::Mat_<double>& R) {
-    if(fabsf(determinant(R))-1.0 > 1e-07) {
-        cerr<<"det(R) != +-1.0, this is not a rotation matrix"<<endl;
-        return false;
-    }
-    return true;
+// Checks if rotation matrix is valid
+bool isRotationMatrix(Mat &R) {
+    Mat Rt;
+    transpose(R, Rt);
+    Mat shouldBeIdentity = Rt * R;
+    Mat I = Mat::eye(3,3, shouldBeIdentity.type());
+    return  norm(I, shouldBeIdentity) < 1e-6;
 }
 
-Mat_<double> LinearLSTriangulation(
-        Point3d u,//homogenous image point (u,v,1)
-        Matx34d P,//camera 1 matrix
-        Point3d u1,//homogenous image point in 2nd camera
-        Matx34d P1//camera 2 matrix
-) {
-    //build A matrix
-    Matx43d A(u.x*P(2,0)-P(0,0),u.x*P(2,1)-P(0,1),u.x*P(2,2)-P(0,2),
-              u.y*P(2,0)-P(1,0),u.y*P(2,1)-P(1,1),u.y*P(2,2)-P(1,2),
-              u1.x*P1(2,0)-P1(0,0), u1.x*P1(2,1)-P1(0,1),u1.x*P1(2,2)-P1(0,2),
-              u1.y*P1(2,0)-P1(1,0), u1.y*P1(2,1)-P1(1,1),u1.y*P1(2,2)-P1(1,2)
-    );
-    //build B vector
-    Matx41d B(-(u.x*P(2,3)-P(0,3)),
-              -(u.y*P(2,3)-P(1,3)),
-              -(u1.x*P1(2,3)-P1(0,3)),
-              -(u1.y*P1(2,3)-P1(1,3)));
-    //solve for X
-    Mat_<double> X;
-    solve(A,B,X,DECOMP_SVD);
-    return X;
+// Convert rotation matrix to a vector of euler angles
+Vec3f rotationMatrixToEulerAngles(Mat &R) {
+    assert(isRotationMatrix(R));
+
+    float sy = sqrt(R.at<double>(0,0) * R.at<double>(0,0) +  R.at<double>(1,0) * R.at<double>(1,0) );
+
+    bool singular = sy < 1e-6;
+
+    float x, y, z;
+
+    if (!singular) {
+        x = atan2(R.at<double>(2,1) , R.at<double>(2,2));
+        y = atan2(-R.at<double>(2,0), sy);
+        z = atan2(R.at<double>(1,0), R.at<double>(0,0));
+    } else {
+        x = atan2(-R.at<double>(1,2), R.at<double>(1,1));
+        y = atan2(-R.at<double>(2,0), sy);
+        z = 0;
+    }
+    return Vec3f(x, y, z);
 }
 
 // Gets colors of keypoints from image
@@ -132,7 +122,8 @@ void getKeypointColors(const vector<Point2f>& imgpts, vector<Vec3b>& colors, con
     }
 }
 
-// Returns fundamental matrix
+// Extracts fundamental matrix (provides camera rotation and translation info) based on matched 2D keypoints in two
+// cameras and a camera calibration matrix
 void FindCameraMatrices(const Mat& K,
                         const vector<Point2f>& imgpts1,
                         const vector<Point2f>& imgpts2,
@@ -157,7 +148,7 @@ void FindCameraMatrices(const Mat& K,
               0,0,1);
     R = svd_u * Mat(W) * svd_vt; //HZ 9.19
     t = svd_u.col(2); //u3
-    if (!CheckCoherentRotation(R)) {
+    if (!isRotationMatrix(R)) {
         cout<<"resulting rotation is not coherent\n";
         return;
     }
@@ -166,46 +157,13 @@ void FindCameraMatrices(const Mat& K,
                  R(2,0),R(2,1),R(2,2),t(2));
 }
 
-bool isRotationMatrix(Mat &R) {
-    Mat Rt;
-    transpose(R, Rt);
-    Mat shouldBeIdentity = Rt * R;
-    Mat I = Mat::eye(3,3, shouldBeIdentity.type());
-    return  norm(I, shouldBeIdentity) < 1e-6;
-}
-
-Vec3f rotationMatrixToEulerAngles(Mat &R) {
-    assert(isRotationMatrix(R));
-
-    float sy = sqrt(R.at<double>(0,0) * R.at<double>(0,0) +  R.at<double>(1,0) * R.at<double>(1,0) );
-
-    bool singular = sy < 1e-6;
-
-    float x, y, z;
-
-    if (!singular) {
-        x = atan2(R.at<double>(2,1) , R.at<double>(2,2));
-        y = atan2(-R.at<double>(2,0), sy);
-        z = atan2(R.at<double>(1,0), R.at<double>(0,0));
-    } else {
-        x = atan2(-R.at<double>(1,2), R.at<double>(1,1));
-        y = atan2(-R.at<double>(2,0), sy);
-        z = 0;
-    }
-    return Vec3f(x, y, z);
-}
-
-
-    // Mat epilines1, epilines2, epilines_quad_img_display, epilines_dual_img_display;
-    // calculateNumEpilines(imgpts1, imgpts2, F, epilines1, epilines2, 70);
-
+// Match epilines with the keypoints they're derived from
 void calculateNumEpilines(vector<Point2f> imgpts1, vector<Point2f> imgpts2, Mat F,
                           std::vector<Vec3f>& epilines1, std::vector<Vec3f>& epilines2, int numpts = 30)
 {
     // Grab a subsample of matched points
     std::vector<Point2f> imgpts1_subsample, imgpts2_subsample;
-    for ( int i = 0; i < numpts; i++ )
-    {
+    for ( int i = 0; i < numpts; i++ ) {
         imgpts1_subsample.emplace_back(imgpts1[i]);
         imgpts2_subsample.emplace_back(imgpts2[i]);
     }
@@ -216,8 +174,8 @@ void calculateNumEpilines(vector<Point2f> imgpts1, vector<Point2f> imgpts2, Mat 
     computeCorrespondEpilines(imgpts2_subsample, 2, F, epilines1);
 }
 
-std::vector<Scalar> getColorPalette()
-{
+// Gets a color palette - used for coloring epilines
+std::vector<Scalar> getColorPalette() {
     // Set up colors - BGR
     std::vector<Scalar> color_palette;
     color_palette.emplace_back(Scalar(217, 198, 255)); // pink
@@ -231,9 +189,9 @@ std::vector<Scalar> getColorPalette()
     return color_palette;
 }
 
+// Creates a "4-piece image" - Draws epilines on two of the images, draws keypoints on the other two
 void createEpilinesQuadImgDisplay(Mat img1_color, Mat img2_color, std::vector<Point2f> imgpts1, std::vector<Point2f> imgpts2,
-                           Mat F, std::vector<Vec3f> epilines1, std::vector<Vec3f> epilines2, Mat& quad_img_display, std::vector<Scalar> color_palette)
-{
+                           Mat F, std::vector<Vec3f> epilines1, std::vector<Vec3f> epilines2, Mat& quad_img_display, std::vector<Scalar> color_palette) {
     // Make copies of each image for drawing
     Mat img2_keypoints = img2_color.clone();
     Mat img2_epilines = img2_color.clone();
@@ -282,9 +240,9 @@ void createEpilinesQuadImgDisplay(Mat img1_color, Mat img2_color, std::vector<Po
     vconcat(dual_img_display12, dual_img_display21, quad_img_display);
 }
 
+// Creates a "2-piece image" - Draws epilines and keypoints on the two input images
 void createEpilinesDualImgDisplay(Mat img1_color, Mat img2_color, std::vector<Point2f> imgpts1, std::vector<Point2f> imgpts2,
-                           Mat F, std::vector<Vec3f> epilines1, std::vector<Vec3f> epilines2, Mat& dual_img_display, std::vector<Scalar> color_palette)
-{
+                           Mat F, std::vector<Vec3f> epilines1, std::vector<Vec3f> epilines2, Mat& dual_img_display, std::vector<Scalar> color_palette) {
     // Make copies of each image for drawing
     Mat img2_copy = img2_color.clone();
     Mat img1_copy = img1_color.clone();
@@ -371,7 +329,7 @@ int main( int argc, char* argv[] ) {
     cvtColor(img1_color, img1, COLOR_BGR2GRAY);
     cvtColor(img2_color, img2, COLOR_BGR2GRAY);
 
-    //-- Step 1: Detect the keypoints using SURF Detector
+    // Detect the keypoints using SURF Detector
     int minHessian = 400;
     Ptr<SURF> detector = SURF::create(minHessian);
 
@@ -426,8 +384,6 @@ int main( int argc, char* argv[] ) {
     Mat_<double> t;
     Mat F;
     FindCameraMatrices(K, imgpts1, imgpts2, P1, R, t, F);
-
-    // std::cout << imgpts2 << std::endl;
 
     // Get Visualizations for Epi Polar Lines -------------------------------------------------------------------------------------------------
     std::vector<Vec3f> epilines1, epilines2;
