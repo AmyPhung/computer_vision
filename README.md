@@ -172,6 +172,8 @@ Through this project, we also ran into a number of other less interesting issues
 ## Lessons Learned
 We learned several important lessons as we worked through this project. Some of our key lessons learned include:
 + _Just because you found a tutorial that includes example code, that doesn’t mean you’ll be able to compile it._ Don’t count on old code working.
++ _Understanding the "black boxes" is crucial for timely debugging._ When code from the internet or elsewhere inevitably doesn't work, getting a general understanding of what each "black box" needs as it's inputs and outputs and knowing how it theoretically works is useful for debugging
++ _Visualizations help tremendously with understanding._ When a "black box" doesn't work, visualizing it is a good time investment, and tends to make it plainly obvious whether something is working or not
 + _External C++ libraries (OpenCv in our case) can take an extremely long time to compile and set up properly._ This is especially true if this is your first time with said library. Start tackling this early and take the time to work through it. There’s not much pressure to rush when you’re just starting a project. Slow and steady compiles the code, and third compilation’s the charm.
 + _Sometimes you just won’t find the root cause of a problem. Just patch it and move on._ At one point, we had fully functional code on one machine that behaved unexpectedly on the other machine. Even after triple checking the code was the same and matching setups as closely as possible, we just couldn’t make it work. Instead, we tweaked the code slightly to make it work on both machines properly. This was probably much better than wasting time with a deep seeded bug, at least for a short project.
 
